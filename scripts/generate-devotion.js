@@ -55,7 +55,7 @@ SCRIPTURE, APPLICATION, and PRAYER.
 
 Rules:
 - SCRIPTURE: reproduce the reference given. If full verse text was provided, include it verbatim; otherwise just state the reference clearly.
-- APPLICATION: 2-4 sentences. Concrete, specific, grounded in the actual text of the passage. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
+- APPLICATION: 2-4 sentences. Concrete, specific, grounded in the actual text of the passage and has nuanced observations. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
 - PRAYER: 2-4 sentences, first person, sincere, tied to the application above, not generic.
 - No headers other than the three exact words SCRIPTURE, APPLICATION, PRAYER, each on its own line, followed by the content.
 - No preamble, no sign-off, no extra commentary.

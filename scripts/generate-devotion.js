@@ -41,6 +41,57 @@ if (!scripture) {
   process.exit(1);
 }
 
+// --- Normalize scripture input into "Reference - Verse text" -------------
+// Accepts input in any order/format (reference first, text first, with or
+// without a dash) and reassembles it consistently. Uses pattern matching
+// only, never the AI, so the original wording is never paraphrased.
+
+const BIBLE_BOOKS = [
+  "1 Chronicles", "2 Chronicles", "1 Corinthians", "2 Corinthians",
+  "1 John", "2 John", "3 John", "1 Kings", "2 Kings", "1 Peter", "2 Peter",
+  "1 Samuel", "2 Samuel", "1 Thessalonians", "2 Thessalonians",
+  "1 Timothy", "2 Timothy", "Song of Solomon", "Song of Songs",
+  "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua",
+  "Judges", "Ruth", "Ezra", "Nehemiah", "Esther", "Job", "Psalm", "Psalms",
+  "Proverbs", "Ecclesiastes", "Isaiah", "Jeremiah", "Lamentations",
+  "Ezekiel", "Daniel", "Hosea", "Joel", "Amos", "Obadiah", "Jonah",
+  "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah",
+  "Malachi", "Matthew", "Mark", "Luke", "John", "Acts", "Romans",
+  "Galatians", "Ephesians", "Philippians", "Colossians", "Titus",
+  "Philemon", "Hebrews", "James", "Jude", "Revelation", "Revelations",
+]
+  // Longest names first so "Song of Solomon" matches before a shorter
+  // partial book name could.
+  .sort((a, b) => b.length - a.length);
+
+function normalizeScripture(input) {
+  const cleaned = input.replace(/\s+/g, " ").trim();
+
+  const bookPattern = BIBLE_BOOKS.map((b) => b.replace(/\s+/g, "\\s+")).join("|");
+  const refPattern = new RegExp(
+    `(${bookPattern})\\s+\\d{1,3}:\\d{1,3}(-\\d{1,3})?`,
+    "i"
+  );
+
+  const match = cleaned.match(refPattern);
+  if (!match) {
+    // No recognizable reference found; leave input untouched rather than
+    // guessing wrong.
+    return cleaned;
+  }
+
+  const reference = match[0];
+  let rest = cleaned.slice(0, match.index) + cleaned.slice(match.index + reference.length);
+
+  // Strip leftover separators from where the reference used to sit.
+  // Deliberately excludes '.' so a verse's real closing period is never eaten.
+  rest = rest.replace(/^[\s\-–—:,]+/, "").replace(/[\s\-–—:,]+$/, "").trim();
+
+  return rest ? `${reference} - ${rest}` : reference;
+}
+
+const normalizedScripture = normalizeScripture(scripture);
+
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -129,7 +180,7 @@ function normalizeQuotes(str) {
 }
 
 async function main() {
-  const devotion = await generateDevotion(scripture);
+  const devotion = await generateDevotion(normalizedScripture);
 
   devotion.scripture = normalizeQuotes(devotion.scripture);
   devotion.application = normalizeQuotes(devotion.application);

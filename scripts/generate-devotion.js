@@ -61,18 +61,16 @@ const date = parsedDate || todayISO();
 // --- Call Groq -------------------------------------------------------------
 
 const SYSTEM_PROMPT = `You write short daily devotions for a personal devotion app.
-Given a scripture reference and/or text, produce exactly three sections:
-SCRIPTURE, APPLICATION, and PRAYER.
+You will be given a scripture reference and/or text. Produce exactly two sections: APPLICATION and PRAYER.
 
 Rules:
-- SCRIPTURE: reproduce the reference given. If full verse text was provided, include it verbatim; otherwise just state the reference clearly.
 - APPLICATION: 2-4 sentences. Concrete, specific, grounded in the actual text of the passage. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
 - PRAYER: 2-4 sentences, first person, sincere, tied to the application above, not generic.
-- No headers other than the three exact words SCRIPTURE, APPLICATION, PRAYER, each on its own line, followed by the content.
+- Do not restate or quote the scripture back, that's handled separately. Focus only on application and prayer.
 - No preamble, no sign-off, no extra commentary.
 
 Respond ONLY with strict JSON in this exact shape, nothing else, no markdown fences:
-{"scripture": "...", "application": "...", "prayer": "..."}`;
+{"application": "...", "prayer": "..."}`;
 
 async function generateDevotion(scriptureInput) {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -109,9 +107,14 @@ async function generateDevotion(scriptureInput) {
     throw new Error(`Failed to parse model output as JSON. Raw output:\n${raw}`);
   }
 
-  if (!parsed.scripture || !parsed.application || !parsed.prayer) {
+  if (!parsed.application || !parsed.prayer) {
     throw new Error(`Model output missing required fields. Got: ${JSON.stringify(parsed)}`);
   }
+
+  // Scripture is never taken from the model. Whatever the user typed in the
+  // issue form is used verbatim, guaranteeing accuracy instead of trusting
+  // the model to reproduce text without paraphrasing or truncating it.
+  parsed.scripture = scriptureInput;
 
   return parsed;
 }

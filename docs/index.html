@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Daily Devotion</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --text: #2b2620;
+    --muted: #6b6459;
+    --accent: #7a5c3e;
+    --card: #ffffff;
+    --border: #e6e1d8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Georgia, 'Times New Roman', serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 48px 20px 80px;
+  }
+  header {
+    margin-bottom: 40px;
+  }
+  header h1 {
+    font-size: 1.5rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 4px;
+    font-weight: 500;
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .entry {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 28px 28px 24px;
+    margin-bottom: 24px;
+  }
+  .entry .date {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .section {
+    margin-bottom: 18px;
+  }
+  .section:last-child { margin-bottom: 0; }
+  .section h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin: 0 0 6px;
+    font-weight: 600;
+  }
+  .section p {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+  .section.scripture p {
+    font-style: italic;
+  }
+  #status {
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Daily Devotion</h1>
+    <p id="status">Loading…</p>
+  </header>
+  <div id="entries"></div>
+</div>
+
+<script>
+async function load() {
+  const statusEl = document.getElementById('status');
+  const entriesEl = document.getElementById('entries');
+  try {
+    const res = await fetch('devotions/devotions.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('Could not load devotions.json (' + res.status + ')');
+    const data = await res.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      statusEl.textContent = 'No devotions yet.';
+      return;
+    }
+
+    statusEl.remove();
+
+    for (const d of data) {
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+      entry.innerHTML = `
+        <div class="date">${formatDate(d.date)}</div>
+        <div class="section scripture">
+          <h2>Scripture</h2>
+          <p>${escapeHtml(d.scripture)}</p>
+        </div>
+        <div class="section">
+          <h2>Application</h2>
+          <p>${escapeHtml(d.application)}</p>
+        </div>
+        <div class="section">
+          <h2>Prayer</h2>
+          <p>${escapeHtml(d.prayer)}</p>
+        </div>
+      `;
+      entriesEl.appendChild(entry);
+    }
+  } catch (err) {
+    statusEl.textContent = 'Could not load devotions right now.';
+    console.error(err);
+  }
+}
+
+function formatDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+load();
+</script>
+</body>
+</html>

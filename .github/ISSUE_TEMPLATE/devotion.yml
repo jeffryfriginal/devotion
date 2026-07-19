@@ -15,7 +15,7 @@ body:
     id: date
     attributes:
       label: Date (optional)
-      description: Defaults to today if left blank. Format YYYY-MM-DD.
-      placeholder: "2026-07-19"
+      description: Defaults to today if left blank. Format M-D-YY.
+      placeholder: "7-19-26"
     validations:
       required: false

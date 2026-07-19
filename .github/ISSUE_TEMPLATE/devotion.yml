@@ -1,0 +1,21 @@
+name: New Devotion
+description: Submit a scripture to generate today's devotion
+title: "Devotion: "
+labels: ["devotion"]
+body:
+  - type: textarea
+    id: scripture
+    attributes:
+      label: Scripture
+      description: Paste the reference and/or full text (e.g. "Psalm 23:1 - The LORD is my shepherd...")
+      placeholder: "Book Chapter:Verse - text"
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: Date (optional)
+      description: Defaults to today if left blank. Format YYYY-MM-DD.
+      placeholder: "2026-07-19"
+    validations:
+      required: false

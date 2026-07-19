@@ -118,8 +118,19 @@ async function generateDevotion(scriptureInput) {
 
 // --- Write to devotions.json ------------------------------------------------
 
+function normalizeQuotes(str) {
+  if (!str) return str;
+  return str
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"');
+}
+
 async function main() {
   const devotion = await generateDevotion(scripture);
+
+  devotion.scripture = normalizeQuotes(devotion.scripture);
+  devotion.application = normalizeQuotes(devotion.application);
+  devotion.prayer = normalizeQuotes(devotion.prayer);
 
   const outPath = path.join(__dirname, "..", "docs", "devotions", "devotions.json");
 

@@ -45,7 +45,18 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const date = /^\d{4}-\d{2}-\d{2}$/.test(dateField) ? dateField : todayISO();
+function parseMDYY(input) {
+  const match = input.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
+  if (!match) return null;
+  const [, m, d, yy] = match;
+  const year = 2000 + parseInt(yy, 10);
+  const month = String(m).padStart(2, "0");
+  const day = String(d).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const parsedDate = parseMDYY(dateField);
+const date = parsedDate || todayISO();
 
 // --- Call Groq -------------------------------------------------------------
 
@@ -55,7 +66,7 @@ SCRIPTURE, APPLICATION, and PRAYER.
 
 Rules:
 - SCRIPTURE: reproduce the reference given. If full verse text was provided, include it verbatim; otherwise just state the reference clearly.
-- APPLICATION: 2-4 sentences. Concrete, specific, grounded in the actual text of the passage and has nuanced observations. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
+- APPLICATION: 2-4 sentences. Concrete, specific, grounded in the actual text of the passage. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
 - PRAYER: 2-4 sentences, first person, sincere, tied to the application above, not generic.
 - No headers other than the three exact words SCRIPTURE, APPLICATION, PRAYER, each on its own line, followed by the content.
 - No preamble, no sign-off, no extra commentary.

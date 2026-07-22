@@ -1,0 +1,78 @@
+name: Generate Devotion
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate devotion
+        id: generate
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: node scripts/generate-devotion.js
+
+      - name: Check if a devotion was actually generated
+        id: check
+        if: always()
+        run: |
+          if [ -f .generate-happened ]; then
+            echo "happened=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "happened=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.check.outputs.happened == 'true'
+        run: |
+          git config user.name "devotion-bot"
+          git config user.email "actions@github.com"
+          git add docs/devotions/devotions.json
+          git diff --staged --quiet || git commit -m "Add devotion from issue #${{ github.event.issue.number }}"
+          git push
+
+      - name: Comment and close issue
+        if: steps.check.outputs.happened == 'true' && success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: "Devotion generated and published. ✅"
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: "closed"
+            });
+
+      - name: Comment on failure
+        if: steps.check.outputs.happened == 'true' && failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: "⚠️ Devotion generation failed. Check the Actions log for this run."
+            });

@@ -64,12 +64,42 @@
     padding: 28px 28px 24px;
     margin-bottom: 24px;
   }
+  .entry .date-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 12px;
+  }
   .entry .date {
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--accent);
-    margin-bottom: 16px;
+  }
+  .entry-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .entry-actions a {
+    font-size: 0.7rem;
+    text-decoration: none;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    white-space: nowrap;
+  }
+  .entry-actions a:hover {
+    background: var(--bg);
+  }
+  .entry-actions a.delete-link {
+    color: #b3261e;
+    border-color: #e8b9b5;
+  }
+  .entry-actions a.delete-link:hover {
+    background: #fdf0ef;
   }
   .section {
     margin-bottom: 18px;
@@ -113,6 +143,9 @@
 </div>
 
 <script>
+// Update this if the repo is ever renamed or transferred.
+const REPO = 'jeffryfriginal/devotion';
+
 let devotions = [];
 
 async function load() {
@@ -136,6 +169,31 @@ async function load() {
   }
 }
 
+function editScriptureUrl(date, currentScripture) {
+  const params = new URLSearchParams({
+    template: 'edit-scripture.yml',
+    date: date,
+    new_scripture: currentScripture,
+  });
+  return `https://github.com/${REPO}/issues/new?${params.toString()}`;
+}
+
+function editDateUrl(date) {
+  const params = new URLSearchParams({
+    template: 'edit-date.yml',
+    current_date: date,
+  });
+  return `https://github.com/${REPO}/issues/new?${params.toString()}`;
+}
+
+function deleteUrl(date) {
+  const params = new URLSearchParams({
+    template: 'delete.yml',
+    date_to_delete: date,
+  });
+  return `https://github.com/${REPO}/issues/new?${params.toString()}`;
+}
+
 function render() {
   const entriesEl = document.getElementById('entries');
   const order = document.getElementById('sortOrder').value;
@@ -150,7 +208,14 @@ function render() {
     const entry = document.createElement('div');
     entry.className = 'entry';
     entry.innerHTML = `
-      <div class="date">${formatDate(d.date)}</div>
+      <div class="date-row">
+        <div class="date">${formatDate(d.date)}</div>
+        <div class="entry-actions">
+          <a href="${editScriptureUrl(d.date, d.scripture)}" target="_blank" rel="noopener">Edit Scripture</a>
+          <a href="${editDateUrl(d.date)}" target="_blank" rel="noopener">Edit Date</a>
+          <a href="${deleteUrl(d.date)}" target="_blank" rel="noopener" class="delete-link">Delete</a>
+        </div>
+      </div>
       <div class="section scripture">
         <h2>Scripture</h2>
         <p>${escapeHtml(d.scripture)}</p>

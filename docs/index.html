@@ -57,6 +57,20 @@
     background: var(--card);
     color: var(--text);
   }
+  .add-new-btn {
+    margin-left: auto;
+    font-family: inherit;
+    font-size: 0.85rem;
+    text-decoration: none;
+    color: #fff;
+    background: var(--accent);
+    border-radius: 4px;
+    padding: 5px 12px;
+    white-space: nowrap;
+  }
+  .add-new-btn:hover {
+    opacity: 0.9;
+  }
   .entry {
     background: var(--card);
     border: 1px solid var(--border);
@@ -136,6 +150,7 @@
         <option value="newest">Newest first</option>
         <option value="oldest">Oldest first</option>
       </select>
+      <a id="addNewLink" href="#" target="_blank" rel="noopener" class="add-new-btn">+ Add New Devotion</a>
     </div>
     <p id="status">Loading…</p>
   </header>
@@ -193,6 +208,12 @@ function deleteUrl(date) {
   });
   return `https://github.com/${REPO}/issues/new?${params.toString()}`;
 }
+
+function newDevotionUrl() {
+  return `https://github.com/${REPO}/issues/new?template=devotion.yml`;
+}
+
+document.getElementById('addNewLink').href = newDevotionUrl();
 
 function render() {
   const entriesEl = document.getElementById('entries');

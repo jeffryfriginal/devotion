@@ -1,0 +1,20 @@
+name: Edit Date
+description: Move an existing devotion entry to a different date. No AI regeneration happens.
+title: "Edit Date"
+body:
+  - type: input
+    id: current_date
+    attributes:
+      label: Current Date
+      description: The date the entry is currently filed under (YYYY-MM-DD).
+      placeholder: "2026-07-19"
+    validations:
+      required: true
+  - type: input
+    id: new_date
+    attributes:
+      label: New Date
+      description: The date you want it moved to (YYYY-MM-DD).
+      placeholder: "2026-07-20"
+    validations:
+      required: true

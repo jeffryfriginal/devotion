@@ -1,0 +1,12 @@
+name: Delete Devotion
+description: Permanently delete a single devotion entry. No confirmation step, this happens immediately.
+title: "Delete Devotion"
+body:
+  - type: input
+    id: date_to_delete
+    attributes:
+      label: Date to Delete
+      description: The date of the entry to permanently remove (YYYY-MM-DD).
+      placeholder: "2026-07-19"
+    validations:
+      required: true

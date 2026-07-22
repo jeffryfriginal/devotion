@@ -1,0 +1,20 @@
+name: Edit Scripture
+description: Change the scripture text for an existing devotion. The AI will regenerate the application and prayer.
+title: "Edit Scripture"
+body:
+  - type: input
+    id: date
+    attributes:
+      label: Date to Edit
+      description: The date of the entry you want to change (YYYY-MM-DD).
+      placeholder: "2026-07-19"
+    validations:
+      required: true
+  - type: textarea
+    id: new_scripture
+    attributes:
+      label: New Scripture Text
+      description: Paste the corrected scripture, any order/format is fine.
+      placeholder: "Book Chapter:Verse - text"
+    validations:
+      required: true

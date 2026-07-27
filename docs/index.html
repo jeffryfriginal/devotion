@@ -254,11 +254,9 @@ function render() {
       </div>
       <div class="section">
         <h2>Application</h2>
-        <ul class="application-list">
-          ${Array.isArray(d.application)
-            ? d.application.map((point) => `<li>${escapeHtml(point)}</li>`).join('')
-            : `<li>${escapeHtml(d.application)}</li>`}
-        </ul>
+        ${Array.isArray(d.application)
+          ? `<ul class="application-list">${d.application.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ul>`
+          : `<p>${escapeHtml(d.application)}</p>`}
       </div>
       <div class="section">
         <h2>Prayer</h2>

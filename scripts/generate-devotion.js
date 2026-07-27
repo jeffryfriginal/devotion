@@ -9,6 +9,15 @@ const path = require("path");
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const ISSUE_BODY = process.env.ISSUE_BODY || "";
 const ISSUE_NUMBER = process.env.ISSUE_NUMBER || "unknown";
+const ISSUE_AUTHOR = process.env.ISSUE_AUTHOR || "";
+
+// Update this if you ever change your GitHub username.
+const OWNER_USERNAME = "jeffryfriginal";
+
+if (ISSUE_AUTHOR.toLowerCase() !== OWNER_USERNAME.toLowerCase()) {
+  console.log(`Issue author "${ISSUE_AUTHOR}" is not the site owner. Skipping.`);
+  process.exit(0);
+}
 
 if (!GROQ_API_KEY) {
   console.error("Missing GROQ_API_KEY env var.");
@@ -119,13 +128,13 @@ const SYSTEM_PROMPT = `You write short daily devotions for a personal devotion a
 You will be given a scripture reference and/or text. Produce exactly two sections: APPLICATION and PRAYER.
 
 Rules:
-- APPLICATION: 2-4 sentences. Concrete, specific, grounded in the actual text of the passage. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
+- APPLICATION: 2-3 bullet points. Each point is exactly one sentence. Concrete, specific, grounded in the actual text of the passage. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
 - PRAYER: 2-4 sentences, first person, sincere, tied to the application above, not generic.
 - Do not restate or quote the scripture back, that's handled separately. Focus only on application and prayer.
 - No preamble, no sign-off, no extra commentary.
 
 Respond ONLY with strict JSON in this exact shape, nothing else, no markdown fences:
-{"application": "...", "prayer": "..."}`;
+{"application": ["point one", "point two", "point three"], "prayer": "..."}`;
 
 async function generateDevotion(scriptureInput) {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -162,8 +171,8 @@ async function generateDevotion(scriptureInput) {
     throw new Error(`Failed to parse model output as JSON. Raw output:\n${raw}`);
   }
 
-  if (!parsed.application || !parsed.prayer) {
-    throw new Error(`Model output missing required fields. Got: ${JSON.stringify(parsed)}`);
+  if (!Array.isArray(parsed.application) || parsed.application.length === 0 || !parsed.prayer) {
+    throw new Error(`Model output missing required fields, or application was not a non-empty array. Got: ${JSON.stringify(parsed)}`);
   }
 
   // Scripture is never taken from the model. Whatever the user typed in the
@@ -187,7 +196,7 @@ async function main() {
   const devotion = await generateDevotion(normalizedScripture);
 
   devotion.scripture = normalizeQuotes(devotion.scripture);
-  devotion.application = normalizeQuotes(devotion.application);
+  devotion.application = devotion.application.map(normalizeQuotes);
   devotion.prayer = normalizeQuotes(devotion.prayer);
 
   const outPath = path.join(__dirname, "..", "docs", "devotions", "devotions.json");

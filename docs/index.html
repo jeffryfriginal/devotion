@@ -270,6 +270,9 @@ async function load() {
     devotions = data;
     statusEl.remove();
     render();
+    if (panel.style.display !== 'none') {
+      renderCalendar();
+    }
   } catch (err) {
     statusEl.textContent = 'Could not load devotions right now.';
     console.error(err);
@@ -277,11 +280,17 @@ async function load() {
 }
 
 function editScriptureUrl(date, currentScripture) {
+  // Very long scripture text risks exceeding safe URL length limits when
+  // prefilled. Past a conservative cap, skip prefilling the text field
+  // rather than risk a truncated or broken link; the date still prefills.
+  const SAFE_PREFILL_LIMIT = 1500;
   const params = new URLSearchParams({
     template: 'edit-scripture.yml',
     date: date,
-    new_scripture: currentScripture,
   });
+  if (currentScripture && currentScripture.length <= SAFE_PREFILL_LIMIT) {
+    params.set('new_scripture', currentScripture);
+  }
   return `https://github.com/${REPO}/issues/new?${params.toString()}`;
 }
 
@@ -312,6 +321,7 @@ function render() {
   const order = document.getElementById('sortOrder').value;
 
   const sorted = [...devotions].sort((a, b) => {
+    if (a.date === b.date) return 0;
     if (order === 'oldest') return a.date < b.date ? -1 : 1;
     return a.date < b.date ? 1 : -1; // newest first
   });
@@ -320,7 +330,7 @@ function render() {
   for (const d of sorted) {
     const entry = document.createElement('div');
     entry.className = 'entry';
-    entry.id = `entry-${d.date}`;
+    entry.id = `entry-${normalizeDateStr(d.date) || d.date}`;
     entry.innerHTML = `
       <div class="date-row">
         <div class="date">${formatDate(d.date)}</div>
@@ -382,13 +392,23 @@ document.getElementById('calNext').addEventListener('click', () => {
   renderCalendar();
 });
 
+function normalizeDateStr(raw) {
+  if (!raw) return null;
+  const match = String(raw).match(/^(\d{1,4})-(\d{1,2})-(\d{1,2})$/);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  return `${y.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
 function renderCalendar() {
   const label = document.getElementById('calLabel');
   const grid = document.getElementById('calendarGrid');
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   label.textContent = `${monthNames[calMonth]} ${calYear}`;
 
-  const entryDates = new Set(devotions.map((d) => d.date));
+  const entryDates = new Set(
+    devotions.map((d) => normalizeDateStr(d.date)).filter(Boolean)
+  );
 
   const firstDay = new Date(calYear, calMonth, 1);
   const startWeekday = firstDay.getDay();

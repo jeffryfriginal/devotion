@@ -130,7 +130,14 @@ async function generateApplicationAndPrayer(scriptureInput) {
 
 // --- Action handlers -------------------------------------------------------
 
-async function editScripture(date, newScriptureRaw) {
+async function editScripture(dateRaw, newScriptureRaw) {
+  const date = parseDateInput(dateRaw);
+  if (!date) {
+    throw new Error(
+      `Could not understand "${dateRaw}" as a date. Use YYYY-MM-DD or M-D-YY. Nothing was changed.`
+    );
+  }
+
   const entries = loadEntries();
   const idx = entries.findIndex((e) => e.date === date);
   if (idx === -1) {
@@ -149,7 +156,55 @@ async function editScripture(date, newScriptureRaw) {
   return `Scripture updated for ${date}, application and prayer regenerated.`;
 }
 
-function editDate(currentDate, newDate) {
+function isValidCalendarDate(year, month, day) {
+  // Guards against things like month=13 or day=32 slipping through as
+  // "valid-looking" strings. JS Date normalizes overflow silently (e.g.
+  // 2026-02-30 becomes March 2), so we check it round-trips exactly.
+  const d = new Date(year, month - 1, day);
+  return (
+    d.getFullYear() === year &&
+    d.getMonth() === month - 1 &&
+    d.getDate() === day
+  );
+}
+
+function parseDateInput(input) {
+  const cleaned = String(input || "").trim();
+
+  // Accept strict ISO format: YYYY-MM-DD
+  const isoMatch = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch.map(Number);
+    return isValidCalendarDate(y, m, d) ? cleaned : null;
+  }
+
+  // Accept the same M-D-YY shorthand used when creating devotions.
+  const shortMatch = cleaned.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
+  if (shortMatch) {
+    const [, m, d, yy] = shortMatch.map(Number);
+    const year = 2000 + yy;
+    if (!isValidCalendarDate(year, m, d)) return null;
+    return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  return null;
+}
+
+function editDate(currentDateRaw, newDateRaw) {
+  const currentDate = parseDateInput(currentDateRaw);
+  const newDate = parseDateInput(newDateRaw);
+
+  if (!currentDate) {
+    throw new Error(
+      `Could not understand "${currentDateRaw}" as a date. Use YYYY-MM-DD or M-D-YY. Nothing was changed.`
+    );
+  }
+  if (!newDate) {
+    throw new Error(
+      `Could not understand "${newDateRaw}" as a date. Use YYYY-MM-DD or M-D-YY. Nothing was changed.`
+    );
+  }
+
   const entries = loadEntries();
   const idx = entries.findIndex((e) => e.date === currentDate);
   if (idx === -1) {
@@ -167,7 +222,14 @@ function editDate(currentDate, newDate) {
   return `Entry moved from ${currentDate} to ${newDate}.`;
 }
 
-function deleteEntry(date) {
+function deleteEntry(dateRaw) {
+  const date = parseDateInput(dateRaw);
+  if (!date) {
+    throw new Error(
+      `Could not understand "${dateRaw}" as a date. Use YYYY-MM-DD or M-D-YY. Nothing was deleted.`
+    );
+  }
+
   const entries = loadEntries();
   const idx = entries.findIndex((e) => e.date === date);
   if (idx === -1) {

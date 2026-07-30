@@ -221,6 +221,40 @@
     color: var(--muted);
     font-size: 0.95rem;
   }
+  .search-box {
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+  .search-status {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+  }
+  .back-to-top-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 10;
+  }
+  .back-to-top-btn:hover {
+    opacity: 0.9;
+  }
 </style>
 </head>
 <body>
@@ -246,8 +280,11 @@
     </div>
     <p id="status">Loading…</p>
   </header>
+  <input type="text" id="searchBox" class="search-box" placeholder="Search scripture, application, or prayer..." />
+  <p id="searchStatus" class="search-status" style="display:none;"></p>
   <div id="entries"></div>
 </div>
+<button id="backToTop" class="back-to-top-btn" type="button" aria-label="Back to top" style="display:none;">&uarr; Top</button>
 
 <script>
 // Update this if the repo is ever renamed or transferred.
@@ -316,11 +353,36 @@ function newDevotionUrl() {
 
 document.getElementById('addNewLink').href = newDevotionUrl();
 
+function matchesSearch(d, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  const scriptureMatch = (d.scripture || '').toLowerCase().includes(q);
+  const prayerMatch = (d.prayer || '').toLowerCase().includes(q);
+  const applicationText = Array.isArray(d.application)
+    ? d.application.join(' ')
+    : (d.application || '');
+  const applicationMatch = applicationText.toLowerCase().includes(q);
+  return scriptureMatch || prayerMatch || applicationMatch;
+}
+
 function render() {
   const entriesEl = document.getElementById('entries');
+  const searchStatusEl = document.getElementById('searchStatus');
   const order = document.getElementById('sortOrder').value;
+  const query = document.getElementById('searchBox').value.trim();
 
-  const sorted = [...devotions].sort((a, b) => {
+  const filtered = devotions.filter((d) => matchesSearch(d, query));
+
+  if (query) {
+    searchStatusEl.style.display = 'block';
+    searchStatusEl.textContent = filtered.length === 0
+      ? `No entries match "${query}".`
+      : `${filtered.length} of ${devotions.length} entries match "${query}".`;
+  } else {
+    searchStatusEl.style.display = 'none';
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
     if (a.date === b.date) return 0;
     if (order === 'oldest') return a.date < b.date ? -1 : 1;
     return a.date < b.date ? 1 : -1; // newest first
@@ -360,6 +422,20 @@ function render() {
 }
 
 document.getElementById('sortOrder').addEventListener('change', render);
+document.getElementById('searchBox').addEventListener('input', render);
+
+// --- Back to top --------------------------------------------------------
+
+const backToTopBtn = document.getElementById('backToTop');
+const SCROLL_SHOW_THRESHOLD = 400;
+
+window.addEventListener('scroll', () => {
+  backToTopBtn.style.display = window.scrollY > SCROLL_SHOW_THRESHOLD ? 'block' : 'none';
+});
+
+backToTopBtn.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 // --- Calendar ---------------------------------------------------------
 

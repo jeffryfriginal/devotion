@@ -1,4 +1,4 @@
-name: Generate Devotion
+name: Manage Devotion
 
 on:
   issues:
@@ -9,7 +9,7 @@ permissions:
   issues: write
 
 jobs:
-  generate:
+  manage:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,44 +20,46 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Generate devotion
-        id: generate
+      - name: Run management action
+        id: manage
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
-        run: node scripts/generate-devotion.js
+        run: node scripts/manage-devotion.js
+        continue-on-error: true
 
-      - name: Check if a devotion was actually generated
+      - name: Check if this issue was a management action
         id: check
-        if: always()
         run: |
-          if [ -f .generate-happened ]; then
-            echo "happened=true" >> "$GITHUB_OUTPUT"
+          if [ ! -f .manage-result ] && [ ! -f .manage-error ]; then
+            echo "not_management=true" >> "$GITHUB_OUTPUT"
           else
-            echo "happened=false" >> "$GITHUB_OUTPUT"
+            echo "not_management=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Commit and push
-        if: steps.check.outputs.happened == 'true'
+        if: steps.check.outputs.not_management == 'false' && steps.manage.outcome == 'success'
         run: |
           git config user.name "devotion-bot"
           git config user.email "actions@github.com"
           git add docs/devotions/devotions.json
-          git diff --staged --quiet || git commit -m "Add devotion from issue #${{ github.event.issue.number }}"
+          git diff --staged --quiet || git commit -m "Manage devotion via issue #${{ github.event.issue.number }}"
           git push
 
-      - name: Comment and close issue
-        if: steps.check.outputs.happened == 'true' && success()
+      - name: Comment success and close
+        if: steps.check.outputs.not_management == 'false' && steps.manage.outcome == 'success'
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
+            const msg = fs.readFileSync('.manage-result', 'utf-8');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: "Devotion generated and published. ✅"
+              body: `✅ ${msg}`
             });
             await github.rest.issues.update({
               owner: context.repo.owner,
@@ -66,14 +68,16 @@ jobs:
               state: "closed"
             });
 
-      - name: Comment on failure
-        if: steps.check.outputs.happened == 'true' && failure()
+      - name: Comment failure
+        if: steps.check.outputs.not_management == 'false' && steps.manage.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
+            const msg = fs.readFileSync('.manage-error', 'utf-8');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: "⚠️ Devotion generation failed. Check the Actions log for this run."
+              body: `⚠️ ${msg}`
             });

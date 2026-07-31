@@ -6,7 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ISSUE_BODY = process.env.ISSUE_BODY || "";
 const ISSUE_NUMBER = process.env.ISSUE_NUMBER || "unknown";
 const ISSUE_AUTHOR = process.env.ISSUE_AUTHOR || "";
@@ -87,31 +87,29 @@ Rules:
 Respond ONLY with strict JSON in this exact shape, nothing else, no markdown fences:
 {"application": ["point one", "point two", "point three"], "prayer": "..."}`;
 
+const GEMINI_MODEL = "gemini-3.6-flash";
+
 async function generateApplicationAndPrayer(scriptureInput) {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${GROQ_API_KEY}`,
+      "x-goog-api-key": GEMINI_API_KEY,
     },
     body: JSON.stringify({
-      model: "openai/gpt-oss-120b",
-      temperature: 0.7,
-      max_tokens: 800,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Scripture input:\n${scriptureInput}` },
-      ],
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ parts: [{ text: `Scripture input:\n${scriptureInput}` }] }],
     }),
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Groq API error ${response.status}: ${text}`);
+    throw new Error(`Gemini API error ${response.status}: ${text}`);
   }
 
   const data = await response.json();
-  const raw = data.choices?.[0]?.message?.content || "";
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   const cleaned = raw.replace(/```json|```/g, "").trim();
 
   let parsed;

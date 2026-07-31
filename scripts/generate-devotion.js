@@ -1,12 +1,12 @@
 // scripts/generate-devotion.js
-// Reads the GitHub issue body (scripture text) from env, calls Groq's
-// openai/gpt-oss-120b model, and appends a structured devotion entry
+// Reads the GitHub issue body (scripture text) from env, calls Google's
+// gemini-3.6-flash model, and appends a structured devotion entry
 // to devotions/devotions.json.
 
 const fs = require("fs");
 const path = require("path");
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ISSUE_BODY = process.env.ISSUE_BODY || "";
 const ISSUE_NUMBER = process.env.ISSUE_NUMBER || "unknown";
 const ISSUE_AUTHOR = process.env.ISSUE_AUTHOR || "";
@@ -19,8 +19,8 @@ if (ISSUE_AUTHOR.toLowerCase() !== OWNER_USERNAME.toLowerCase()) {
   process.exit(0);
 }
 
-if (!GROQ_API_KEY) {
-  console.error("Missing GROQ_API_KEY env var.");
+if (!GEMINI_API_KEY) {
+  console.error("Missing GEMINI_API_KEY env var.");
   process.exit(1);
 }
 
@@ -128,7 +128,7 @@ const SYSTEM_PROMPT = `You write short daily devotions for a personal devotion a
 You will be given a scripture reference and/or text. Produce exactly two sections: APPLICATION and PRAYER.
 
 Rules:
-- APPLICATION: 2-3 bullet points. Each point is exactly one sentence. Concrete, specific, grounded in the actual text of the passage. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card. Use only first-person plural when writing (we, us, our, ours, ourselves). Write like a thoughtful, opinionated human , not like an AI trying to be helpful. Use a conversational tone, mix short and long sentences naturally, and avoid formal transitions like 'Furthermore' or 'Moreover.' Dont use em-dashes
+- APPLICATION: 2-3 bullet points. Each point is exactly one sentence. Concrete, specific, grounded in the actual text of the passage. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
 - PRAYER: 2-4 sentences, first person, sincere, tied to the application above, not generic.
 - Do not restate or quote the scripture back, that's handled separately. Focus only on application and prayer.
 - No preamble, no sign-off, no extra commentary.
@@ -136,31 +136,29 @@ Rules:
 Respond ONLY with strict JSON in this exact shape, nothing else, no markdown fences:
 {"application": ["point one", "point two", "point three"], "prayer": "..."}`;
 
+const GEMINI_MODEL = "gemini-3.6-flash";
+
 async function generateDevotion(scriptureInput) {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${GROQ_API_KEY}`,
+      "x-goog-api-key": GEMINI_API_KEY,
     },
     body: JSON.stringify({
-      model: "openai/gpt-oss-120b",
-      temperature: 0.7,
-      max_tokens: 800,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Scripture input:\n${scriptureInput}` },
-      ],
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ parts: [{ text: `Scripture input:\n${scriptureInput}` }] }],
     }),
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Groq API error ${response.status}: ${text}`);
+    throw new Error(`Gemini API error ${response.status}: ${text}`);
   }
 
   const data = await response.json();
-  const raw = data.choices?.[0]?.message?.content || "";
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
   const cleaned = raw.replace(/```json|```/g, "").trim();
 

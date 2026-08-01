@@ -13,6 +13,14 @@
     --card: #ffffff;
     --border: #e6e1d8;
   }
+  :root[data-theme="dark"] {
+    --bg: #1a1613;
+    --text: #ece6da;
+    --muted: #a89d8c;
+    --accent: #d8a662;
+    --card: #221d18;
+    --border: #3a3129;
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -20,6 +28,7 @@
     background: var(--bg);
     color: var(--text);
     line-height: 1.6;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
   .wrap {
     max-width: 640px;
@@ -28,6 +37,14 @@
   }
   header {
     margin-bottom: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  header .header-text {
+    flex: 1;
+    min-width: 0;
   }
   header h1 {
     font-size: 1.5rem;
@@ -39,6 +56,35 @@
     margin: 0;
     color: var(--muted);
     font-size: 0.9rem;
+  }
+  .theme-toggle {
+    flex-shrink: 0;
+    width: 52px;
+    height: 28px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    position: relative;
+    cursor: pointer;
+    padding: 0;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+  }
+  .theme-toggle .knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: transform 0.25s ease, background-color 0.25s ease;
+  }
+  :root[data-theme="dark"] .theme-toggle .knob {
+    transform: translateX(24px);
   }
   .controls {
     margin-bottom: 12px;
@@ -91,6 +137,7 @@
     border-radius: 6px;
     padding: 16px;
     margin-bottom: 16px;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
   }
   .calendar-nav {
     display: flex;
@@ -149,6 +196,7 @@
     border-radius: 6px;
     padding: 28px 28px 24px;
     margin-bottom: 24px;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
   }
   .entry .date-row {
     display: flex;
@@ -231,6 +279,7 @@
     background: var(--card);
     color: var(--text);
     margin-bottom: 16px;
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
   }
   .search-status {
     color: var(--muted);
@@ -260,26 +309,31 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Daily Devotion</h1>
-    <div class="controls">
-      <label for="sortOrder">Sort:</label>
-      <select id="sortOrder">
-        <option value="newest">Newest first</option>
-        <option value="oldest">Oldest first</option>
-      </select>
-      <a id="addNewLink" href="#" target="_blank" rel="noopener" class="add-new-btn">+ Add New Devotion</a>
-      <button id="calendarToggle" class="calendar-toggle-btn" type="button">Show Calendar</button>
+    <div class="header-text">
+      <h1>Daily Devotion</h1>
+      <p id="status">Loading…</p>
     </div>
-    <div id="calendarPanel" class="calendar-panel" style="display:none;">
-      <div class="calendar-nav">
-        <button id="calPrev" type="button">&larr;</button>
-        <span id="calLabel"></span>
-        <button id="calNext" type="button">&rarr;</button>
-      </div>
-      <div class="calendar-grid" id="calendarGrid"></div>
-    </div>
-    <p id="status">Loading…</p>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+      <span class="knob">☀️</span>
+    </button>
   </header>
+  <div class="controls">
+    <label for="sortOrder">Sort:</label>
+    <select id="sortOrder">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+    </select>
+    <a id="addNewLink" href="#" target="_blank" rel="noopener" class="add-new-btn">+ Add New Devotion</a>
+    <button id="calendarToggle" class="calendar-toggle-btn" type="button">Show Calendar</button>
+  </div>
+  <div id="calendarPanel" class="calendar-panel" style="display:none;">
+    <div class="calendar-nav">
+      <button id="calPrev" type="button">&larr;</button>
+      <span id="calLabel"></span>
+      <button id="calNext" type="button">&rarr;</button>
+    </div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+  </div>
   <input type="text" id="searchBox" class="search-box" placeholder="Search scripture, application, or prayer..." />
   <p id="searchStatus" class="search-status" style="display:none;"></p>
   <div id="entries"></div>
@@ -535,6 +589,24 @@ function escapeHtml(str) {
   div.textContent = str || '';
   return div.innerHTML;
 }
+
+// --- Dark mode ------------------------------------------------------------
+// No persistence: resets to light on every page load, per request.
+
+const themeToggle = document.getElementById('themeToggle');
+const themeKnob = themeToggle.querySelector('.knob');
+
+themeToggle.addEventListener('click', () => {
+  const root = document.documentElement;
+  const isDark = root.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    root.removeAttribute('data-theme');
+    themeKnob.textContent = '☀️';
+  } else {
+    root.setAttribute('data-theme', 'dark');
+    themeKnob.textContent = '🌙';
+  }
+});
 
 load();
 </script>

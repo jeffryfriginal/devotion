@@ -56,8 +56,31 @@ const BIBLE_BOOKS = [
   "Philemon", "Hebrews", "James", "Jude", "Revelation", "Revelations",
 ].sort((a, b) => b.length - a.length);
 
+// A real book name + chapter:verse is short. Cap the prefix so a whole
+// paragraph ending in a verse number can't be mistaken for 'reference-first'.
+const MAX_REF_PREFIX_LEN = 30;
+
 function normalizeScripture(input) {
   const cleaned = input.replace(/\s+/g, " ").trim();
+
+  const alreadyFormatted = new RegExp(
+    `^.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?\\s*-\\s*\\S`
+  ).test(cleaned);
+  if (alreadyFormatted) return cleaned;
+
+  const refFirstMatch = cleaned.match(
+    new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?)\\s+(\\S.*)$`)
+  );
+  if (refFirstMatch) {
+    const [, reference, , rest] = refFirstMatch;
+    return `${reference} - ${rest}`;
+  }
+
+  const bareRefMatch = cleaned.match(
+    new RegExp(`^.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?$`)
+  );
+  if (bareRefMatch) return cleaned;
+
   const bookPattern = BIBLE_BOOKS.map((b) => b.replace(/\s+/g, "\\s+")).join("|");
   const refPattern = new RegExp(`(${bookPattern})\\s+\\d{1,3}:\\d{1,3}(-\\d{1,3})?`, "i");
   const match = cleaned.match(refPattern);

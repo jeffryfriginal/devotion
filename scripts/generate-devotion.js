@@ -77,22 +77,50 @@ const BIBLE_BOOKS = [
   // partial book name could.
   .sort((a, b) => b.length - a.length);
 
+// A real book name + chapter:verse is short. Cap the prefix so a whole
+// paragraph ending in a verse number can't be mistaken for 'reference-first'.
+const MAX_REF_PREFIX_LEN = 30;
+
 function normalizeScripture(input) {
   const cleaned = input.replace(/\s+/g, " ").trim();
 
+  // Already correctly formatted as 'Reference - Text'. Language-agnostic,
+  // works regardless of what language the book name is in.
+  const alreadyFormatted = new RegExp(
+    `^.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?\\s*-\\s*\\S`
+  ).test(cleaned);
+  if (alreadyFormatted) return cleaned;
+
+  // Reference-first with no dash before the trailing text
+  // ('Isaias 46:4 Ako ang...' or '2 Timothy 1:7 For the Spirit...').
+  // Language-agnostic: no hardcoded book list needed for this case.
+  const refFirstMatch = cleaned.match(
+    new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?)\\s+(\\S.*)$`)
+  );
+  if (refFirstMatch) {
+    const [, reference, , rest] = refFirstMatch;
+    return `${reference} - ${rest}`;
+  }
+
+  // Bare reference only, nothing trailing. Leave as-is.
+  const bareRefMatch = cleaned.match(
+    new RegExp(`^.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?$`)
+  );
+  if (bareRefMatch) return cleaned;
+
+  // Text-first, reference at the end (English only, needs the book list
+  // since we can't otherwise tell where an embedded reference starts).
   const bookPattern = BIBLE_BOOKS.map((b) => b.replace(/\s+/g, "\\s+")).join("|");
   const refPattern = new RegExp(
     `(${bookPattern})\\s+\\d{1,3}:\\d{1,3}(-\\d{1,3})?`,
     "i"
   );
-
   const match = cleaned.match(refPattern);
   if (!match) {
     // No recognizable reference found; leave input untouched rather than
     // guessing wrong.
     return cleaned;
   }
-
   const reference = match[0];
   let rest = cleaned.slice(0, match.index) + cleaned.slice(match.index + reference.length);
 

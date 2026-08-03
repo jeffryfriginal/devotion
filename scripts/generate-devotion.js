@@ -19,11 +19,6 @@ if (ISSUE_AUTHOR.toLowerCase() !== OWNER_USERNAME.toLowerCase()) {
   process.exit(0);
 }
 
-if (!GEMINI_API_KEY) {
-  console.error("Missing GEMINI_API_KEY env var.");
-  process.exit(1);
-}
-
 // --- Parse the issue form body -------------------------------------------
 // GitHub issue forms render fields as markdown, roughly:
 // ### Scripture
@@ -52,6 +47,11 @@ if (!scripture) {
   // new issue without stepping on each other.
   console.log("No Scripture field found. Not a devotion-creation issue. Skipping.");
   process.exit(0);
+}
+
+if (!GEMINI_API_KEY) {
+  console.error("Missing GEMINI_API_KEY env var.");
+  process.exit(1);
 }
 
 // --- Normalize scripture input into "Reference - Verse text" -------------
@@ -137,14 +137,28 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function isValidCalendarDate(year, month, day) {
+  // JavaScript Date silently normalizes invalid dates, so require an exact
+  // round trip before accepting user input.
+  const d = new Date(year, month - 1, day);
+  return (
+    d.getFullYear() === year &&
+    d.getMonth() === month - 1 &&
+    d.getDate() === day
+  );
+}
+
 function parseMDYY(input) {
-  const match = input.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
+  const match = String(input || "").trim().match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
   if (!match) return null;
-  const [, m, d, yy] = match;
-  const year = 2000 + parseInt(yy, 10);
-  const month = String(m).padStart(2, "0");
-  const day = String(d).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const [, m, d, yy] = match.map(Number);
+  const year = 2000 + yy;
+  if (!isValidCalendarDate(year, m, d)) {
+    throw new Error(
+      `Could not understand "${input}" as a date. Use M-D-YY with a real calendar date, or leave it blank. Nothing was changed.`
+    );
+  }
+  return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
 const parsedDate = parseMDYY(dateField);

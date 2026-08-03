@@ -81,6 +81,19 @@ function normalizeScripture(input) {
   );
   if (bareRefMatch) return cleaned;
 
+  // Text-first with a short language-agnostic reference at the very end
+  // ('Verse text. Mga Taga-Filipos 2:3'). Match only the bounded tail
+  // immediately before chapter:verse, not the whole paragraph.
+  const trailingRefMatch = cleaned.match(
+    new RegExp(`^(.+?)\\s+([^\\s.!?;][^.!?;]{0,${MAX_REF_PREFIX_LEN - 1}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?)$`)
+  );
+  if (trailingRefMatch) {
+    const [, text, reference] = trailingRefMatch;
+    let rest = text;
+    rest = rest.replace(/^[\s\-–—:,]+/, "").replace(/[\s\-–—:,]+$/, "").trim();
+    return rest ? `${reference} - ${rest}` : reference;
+  }
+
   const bookPattern = BIBLE_BOOKS.map((b) => b.replace(/\s+/g, "\\s+")).join("|");
   const refPattern = new RegExp(`(${bookPattern})\\s+\\d{1,3}:\\d{1,3}(-\\d{1,3})?`, "i");
   const match = cleaned.match(refPattern);
@@ -102,7 +115,8 @@ const SYSTEM_PROMPT = `You write short daily devotions for a personal devotion a
 You will be given a scripture reference and/or text. Produce exactly two sections: APPLICATION and PRAYER.
 
 Rules:
-- APPLICATION: 2-3 bullet points. Each point is exactly one sentence. Concrete, specific, grounded in the actual text of the passage. Avoid vague platitudes ("God is good", "trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card.
+- Match the language of your response to the language of the scripture input. If the scripture is in English, respond in English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog).
+- APPLICATION: 2-3 bullet points. Each point is exactly one sentence. Explain the main spiritual truth of the passage in a simple, natural, and relatable way. Do not merely repeat or summarize the verse. Help the reader understand what God may be teaching through the passage and why it matters in everyday life. Explain what the reader can actually do, change, practice, or remember after reading the devotional. The application should encourage personal reflection, obedience, and a closer relationship with God. Use simple words. Avoid vague platitudes ("trust the process") unless directly tied to something specific in the passage. Write like a thoughtful person reflecting, not a greeting card. Write it in first-person plural (we, us, our, ours, ourselves)
 - PRAYER: 2-4 sentences, first person, sincere, tied to the application above, not generic.
 - Do not restate or quote the scripture back, that's handled separately. Focus only on application and prayer.
 - No preamble, no sign-off, no extra commentary.
@@ -113,6 +127,10 @@ Respond ONLY with strict JSON in this exact shape, nothing else, no markdown fen
 const GEMINI_MODEL = "gemini-3.6-flash";
 
 async function generateApplicationAndPrayer(scriptureInput) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY env var. Nothing was changed.");
+  }
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const response = await fetch(url, {
     method: "POST",

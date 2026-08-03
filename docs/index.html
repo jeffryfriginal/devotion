@@ -634,7 +634,13 @@ function renderCalendar() {
 
     if (hasEntry) {
       cell.addEventListener('click', () => {
-        const target = document.getElementById(`entry-${dateStr}`);
+        let target = document.getElementById(`entry-${dateStr}`);
+        const searchBox = document.getElementById('searchBox');
+        if (!target && searchBox.value.trim()) {
+          searchBox.value = '';
+          render();
+          target = document.getElementById(`entry-${dateStr}`);
+        }
         if (target) {
           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
           target.style.outline = `2px solid var(--accent)`;

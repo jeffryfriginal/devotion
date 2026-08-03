@@ -304,10 +304,78 @@
   .back-to-top-btn:hover {
     opacity: 0.9;
   }
-</style>
+  .wrap {
+    display: none;
+  }
+  .wrap.unlocked {
+    display: block;
+  }
+  .password-gate {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: background-color 0.25s ease;
+  }
+  .password-gate-box {
+    text-align: center;
+    padding: 24px;
+    max-width: 320px;
+    width: 100%;
+  }
+  .password-gate-box h2 {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin: 0 0 16px;
+    color: var(--text);
+  }
+  .password-gate-box input {
+    width: 100%;
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text);
+    text-align: center;
+    box-sizing: border-box;
+  }
+  .password-gate-box button {
+    margin-top: 12px;
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  .password-gate-box button:hover {
+    opacity: 0.9;
+  }
+  .password-gate-error {
+    color: #b3261e;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    min-height: 1.2em;
+  }</style>
 </head>
 <body>
-<div class="wrap">
+<div id="passwordGate" class="password-gate">
+  <div class="password-gate-box">
+    <h2>Enter password</h2>
+    <input type="password" id="passwordInput" autocomplete="off" />
+    <button id="passwordSubmit" type="button">Unlock</button>
+    <div id="passwordError" class="password-gate-error"></div>
+  </div>
+</div>
+<div class="wrap" id="mainWrap">
   <header>
     <div class="header-text">
       <h1>Daily Devotion</h1>
@@ -608,7 +676,38 @@ themeToggle.addEventListener('click', () => {
   }
 });
 
-load();
+// --- Password gate ----------------------------------------------------
+// Deterrent only, not real security: this is client-side JS on a static
+// site, so the password is visible in page source to anyone who looks,
+// and devotions.json is still directly fetchable by URL regardless of
+// this gate. It only stops the page from rendering/fetching content
+// before the password is entered casually.
+
+const SITE_PASSWORD = "Bachelor01";
+
+const gateEl = document.getElementById('passwordGate');
+const wrapEl = document.getElementById('mainWrap');
+const passwordInput = document.getElementById('passwordInput');
+const passwordSubmit = document.getElementById('passwordSubmit');
+const passwordError = document.getElementById('passwordError');
+
+function tryUnlock() {
+  if (passwordInput.value === SITE_PASSWORD) {
+    gateEl.style.display = 'none';
+    wrapEl.classList.add('unlocked');
+    load();
+  } else {
+    passwordError.textContent = 'Incorrect password.';
+    passwordInput.value = '';
+    passwordInput.focus();
+  }
+}
+
+passwordSubmit.addEventListener('click', tryUnlock);
+passwordInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') tryUnlock();
+});
+passwordInput.focus();
 </script>
 </body>
 </html>

@@ -81,6 +81,19 @@ function normalizeScripture(input) {
   );
   if (bareRefMatch) return cleaned;
 
+  // Text-first with a short language-agnostic reference at the very end
+  // ('Verse text. Mga Taga-Filipos 2:3'). Match only the bounded tail
+  // immediately before chapter:verse, not the whole paragraph.
+  const trailingRefMatch = cleaned.match(
+    new RegExp(`^(.+?)\\s+([^\\s.!?;][^.!?;]{0,${MAX_REF_PREFIX_LEN - 1}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?)$`)
+  );
+  if (trailingRefMatch) {
+    const [, text, reference] = trailingRefMatch;
+    let rest = text;
+    rest = rest.replace(/^[\s\-–—:,]+/, "").replace(/[\s\-–—:,]+$/, "").trim();
+    return rest ? `${reference} - ${rest}` : reference;
+  }
+
   const bookPattern = BIBLE_BOOKS.map((b) => b.replace(/\s+/g, "\\s+")).join("|");
   const refPattern = new RegExp(`(${bookPattern})\\s+\\d{1,3}:\\d{1,3}(-\\d{1,3})?`, "i");
   const match = cleaned.match(refPattern);

@@ -702,6 +702,7 @@ const passwordError = document.getElementById('passwordError');
 async function tryUnlock() {
   const typed = passwordInput.value;
   passwordSubmit.disabled = true;
+  passwordSubmit.textContent = 'Checking password...';
   passwordError.textContent = '';
 
   try {
@@ -717,6 +718,7 @@ async function tryUnlock() {
     console.error(err);
   } finally {
     passwordSubmit.disabled = false;
+    passwordSubmit.textContent = 'Unlock';
   }
 }
 

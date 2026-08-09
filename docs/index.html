@@ -412,29 +412,33 @@
 // Update this if the repo is ever renamed or transferred.
 const REPO = 'jeffryfriginal/devotion';
 
+// Paste your deployed Apps Script Web App URL here (Deploy > New deployment
+// > Web app, after setting SITE_PASSWORD and WRITE_API_KEY in Script
+// Properties). This URL itself is not secret, the password check happens
+// server-side inside Apps Script regardless of who calls this URL or how.
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz36LFzjUqpmZGlZqwnLqsFNpNWIRhYLH2XMl72CQAdGb8TzLLpdDqdFwLXJtsXqLXy1A/exec';
+
 let devotions = [];
 
-async function load() {
+async function fetchDevotions(password) {
   const statusEl = document.getElementById('status');
-  try {
-    const res = await fetch('devotions/devotions.json', { cache: 'no-store' });
-    if (!res.ok) throw new Error('Could not load devotions.json (' + res.status + ')');
-    const data = await res.json();
+  const url = `${APPS_SCRIPT_URL}?password=${encodeURIComponent(password)}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Server error (${res.status})`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Incorrect password.');
 
-    if (!Array.isArray(data) || data.length === 0) {
-      statusEl.textContent = 'No devotions yet.';
-      return;
-    }
+  if (!Array.isArray(data.data) || data.data.length === 0) {
+    devotions = [];
+    statusEl.textContent = 'No devotions yet.';
+    return;
+  }
 
-    devotions = data;
-    statusEl.remove();
-    render();
-    if (panel.style.display !== 'none') {
-      renderCalendar();
-    }
-  } catch (err) {
-    statusEl.textContent = 'Could not load devotions right now.';
-    console.error(err);
+  devotions = data.data;
+  statusEl.remove();
+  render();
+  if (panel.style.display !== 'none') {
+    renderCalendar();
   }
 }
 
@@ -683,13 +687,11 @@ themeToggle.addEventListener('click', () => {
 });
 
 // --- Password gate ----------------------------------------------------
-// Deterrent only, not real security: this is client-side JS on a static
-// site, so the password is visible in page source to anyone who looks,
-// and devotions.json is still directly fetchable by URL regardless of
-// this gate. It only stops the page from rendering/fetching content
-// before the password is entered casually.
-
-const SITE_PASSWORD = "Bachelor01";
+// Real server-side check now: the typed password is sent to Apps Script,
+// which validates it against SITE_PASSWORD stored in Script Properties
+// (never in this file) and only returns data if it's correct. Unlike the
+// old client-side-only version, there is no password to find in page
+// source anymore, and there's no separate public data file to bypass to.
 
 const gateEl = document.getElementById('passwordGate');
 const wrapEl = document.getElementById('mainWrap');
@@ -697,15 +699,24 @@ const passwordInput = document.getElementById('passwordInput');
 const passwordSubmit = document.getElementById('passwordSubmit');
 const passwordError = document.getElementById('passwordError');
 
-function tryUnlock() {
-  if (passwordInput.value === SITE_PASSWORD) {
+async function tryUnlock() {
+  const typed = passwordInput.value;
+  passwordSubmit.disabled = true;
+  passwordError.textContent = '';
+
+  try {
+    await fetchDevotions(typed);
     gateEl.style.display = 'none';
     wrapEl.classList.add('unlocked');
-    load();
-  } else {
-    passwordError.textContent = 'Incorrect password.';
+  } catch (err) {
+    passwordError.textContent = err.message === 'Incorrect password.'
+      ? 'Incorrect password.'
+      : 'Could not verify password. Try again.';
     passwordInput.value = '';
     passwordInput.focus();
+    console.error(err);
+  } finally {
+    passwordSubmit.disabled = false;
   }
 }
 

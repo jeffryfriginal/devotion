@@ -1,11 +1,13 @@
 // scripts/generate-devotion.js
 // Reads the GitHub issue body (scripture text) from env, calls Google's
-// gemini-3.6-flash model, and appends a structured devotion entry
-// to devotions/devotions.json.
+// gemini-3.6-flash model, and writes the entry to a Google Sheet via the
+// Apps Script API (not a local devotions.json file).
 
 const fs = require("fs");
 const path = require("path");
 
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
+const WRITE_API_KEY = process.env.WRITE_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ISSUE_BODY = process.env.ISSUE_BODY || "";
 const ISSUE_NUMBER = process.env.ISSUE_NUMBER || "unknown";
@@ -51,6 +53,11 @@ if (!scripture) {
 
 if (!GEMINI_API_KEY) {
   console.error("Missing GEMINI_API_KEY env var.");
+  process.exit(1);
+}
+
+if (!APPS_SCRIPT_URL || !WRITE_API_KEY) {
+  console.error("Missing APPS_SCRIPT_URL or WRITE_API_KEY env var.");
   process.exit(1);
 }
 
@@ -237,13 +244,32 @@ async function generateDevotion(scriptureInput) {
   return parsed;
 }
 
-// --- Write to devotions.json ------------------------------------------------
+// --- Write via Apps Script API ----------------------------------------
 
 function normalizeQuotes(str) {
   if (!str) return str;
   return str
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201C\u201D]/g, '"');
+}
+
+async function callAppsScript(action, payload) {
+  const response = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apiKey: WRITE_API_KEY, action, ...payload }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Apps Script HTTP error ${response.status}: ${text}`);
+  }
+
+  const data = await response.json();
+  if (!data.success) {
+    throw new Error(`Apps Script rejected the request: ${data.error}`);
+  }
+  return data;
 }
 
 async function main() {
@@ -253,29 +279,15 @@ async function main() {
   devotion.application = devotion.application.map(normalizeQuotes);
   devotion.prayer = normalizeQuotes(devotion.prayer);
 
-  const outPath = path.join(__dirname, "..", "docs", "devotions", "devotions.json");
-
-  let existing = [];
-  if (fs.existsSync(outPath)) {
-    existing = JSON.parse(fs.readFileSync(outPath, "utf-8"));
-  }
-
-  // Prevent duplicate entries for the same date; overwrite if regenerating.
-  existing = existing.filter((d) => d.date !== date);
-
-  existing.push({
+  const result = await callAppsScript("create", {
     date,
     scripture: devotion.scripture,
     application: devotion.application,
     prayer: devotion.prayer,
     sourceIssue: ISSUE_NUMBER,
-    generatedAt: new Date().toISOString(),
   });
 
-  existing.sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
-
-  fs.writeFileSync(outPath, JSON.stringify(existing, null, 2) + "\n");
-  console.log(`Wrote devotion for ${date} to ${outPath}`);
+  console.log(result.message);
   fs.writeFileSync(path.join(__dirname, "..", ".generate-happened"), "true");
 }
 

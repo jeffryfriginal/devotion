@@ -1,11 +1,12 @@
 // scripts/manage-devotion.js
-// Handles three actions on existing devotions.json entries, detected by
-// which fields are present in the issue body: edit scripture (reruns AI),
-// edit date (move, no AI), and delete (single entry, no confirmation).
+// Handles three actions via the Apps Script API (not a local devotions.json
+// file): edit scripture (reruns AI), edit date (move, no AI), delete.
 
 const fs = require("fs");
 const path = require("path");
 
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
+const WRITE_API_KEY = process.env.WRITE_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ISSUE_BODY = process.env.ISSUE_BODY || "";
 const ISSUE_NUMBER = process.env.ISSUE_NUMBER || "unknown";
@@ -19,7 +20,8 @@ if (ISSUE_AUTHOR.toLowerCase() !== OWNER_USERNAME.toLowerCase()) {
   process.exit(0);
 }
 
-const DATA_PATH = path.join(__dirname, "..", "docs", "devotions", "devotions.json");
+// (APPS_SCRIPT_URL / WRITE_API_KEY are checked inside callAppsScript, not
+// here, so this script can still safely no-op on non-management issues.)
 
 function extractField(body, label) {
   const re = new RegExp(`### ${label}\\s*\\n+([\\s\\S]*?)(?=\\n### |$)`, "i");
@@ -29,14 +31,27 @@ function extractField(body, label) {
   return value === "_No response_" ? "" : value;
 }
 
-function loadEntries() {
-  if (!fs.existsSync(DATA_PATH)) return [];
-  return JSON.parse(fs.readFileSync(DATA_PATH, "utf-8"));
-}
+async function callAppsScript(action, payload) {
+  if (!APPS_SCRIPT_URL || !WRITE_API_KEY) {
+    throw new Error("Missing APPS_SCRIPT_URL or WRITE_API_KEY env var. Nothing was changed.");
+  }
 
-function saveEntries(entries) {
-  entries.sort((a, b) => (a.date < b.date ? 1 : -1));
-  fs.writeFileSync(DATA_PATH, JSON.stringify(entries, null, 2) + "\n");
+  const response = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apiKey: WRITE_API_KEY, action, ...payload }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Apps Script HTTP error ${response.status}: ${text}`);
+  }
+
+  const data = await response.json();
+  if (!data.success) {
+    throw new Error(data.error);
+  }
+  return data;
 }
 
 // --- Scripture normalization (same logic as generate-devotion.js) --------
@@ -177,22 +192,17 @@ async function editScripture(dateRaw, newScriptureRaw) {
     );
   }
 
-  const entries = loadEntries();
-  const idx = entries.findIndex((e) => e.date === date);
-  if (idx === -1) {
-    throw new Error(`No entry found for date ${date}. Nothing was changed.`);
-  }
-
   const normalized = normalizeScripture(newScriptureRaw);
   const { application, prayer } = await generateApplicationAndPrayer(normalized);
 
-  entries[idx].scripture = normalizeQuotes(normalized);
-  entries[idx].application = application.map(normalizeQuotes);
-  entries[idx].prayer = normalizeQuotes(prayer);
-  entries[idx].generatedAt = new Date().toISOString();
+  const result = await callAppsScript("editScripture", {
+    date,
+    scripture: normalizeQuotes(normalized),
+    application: application.map(normalizeQuotes),
+    prayer: normalizeQuotes(prayer),
+  });
 
-  saveEntries(entries);
-  return `Scripture updated for ${date}, application and prayer regenerated.`;
+  return result.message;
 }
 
 function isValidCalendarDate(year, month, day) {
@@ -229,7 +239,7 @@ function parseDateInput(input) {
   return null;
 }
 
-function editDate(currentDateRaw, newDateRaw) {
+async function editDate(currentDateRaw, newDateRaw) {
   const currentDate = parseDateInput(currentDateRaw);
   const newDate = parseDateInput(newDateRaw);
 
@@ -244,24 +254,11 @@ function editDate(currentDateRaw, newDateRaw) {
     );
   }
 
-  const entries = loadEntries();
-  const idx = entries.findIndex((e) => e.date === currentDate);
-  if (idx === -1) {
-    throw new Error(`No entry found for date ${currentDate}. Nothing was changed.`);
-  }
-  const collision = entries.some((e) => e.date === newDate);
-  if (collision) {
-    throw new Error(
-      `An entry already exists for ${newDate}. Refusing to overwrite it. Delete or move that entry first if you want to reuse this date.`
-    );
-  }
-
-  entries[idx].date = newDate;
-  saveEntries(entries);
-  return `Entry moved from ${currentDate} to ${newDate}.`;
+  const result = await callAppsScript("editDate", { currentDate, newDate });
+  return result.message;
 }
 
-function deleteEntry(dateRaw) {
+async function deleteEntry(dateRaw) {
   const date = parseDateInput(dateRaw);
   if (!date) {
     throw new Error(
@@ -269,14 +266,8 @@ function deleteEntry(dateRaw) {
     );
   }
 
-  const entries = loadEntries();
-  const idx = entries.findIndex((e) => e.date === date);
-  if (idx === -1) {
-    throw new Error(`No entry found for date ${date}. Nothing was deleted.`);
-  }
-  entries.splice(idx, 1);
-  saveEntries(entries);
-  return `Entry for ${date} deleted.`;
+  const result = await callAppsScript("delete", { date });
+  return result.message;
 }
 
 // --- Main: detect action from body fields ----------------------------------
@@ -293,9 +284,9 @@ async function main() {
   if (editScriptureDate && newScripture) {
     resultMessage = await editScripture(editScriptureDate, newScripture);
   } else if (currentDate && newDate) {
-    resultMessage = editDate(currentDate, newDate);
+    resultMessage = await editDate(currentDate, newDate);
   } else if (dateToDelete) {
-    resultMessage = deleteEntry(dateToDelete);
+    resultMessage = await deleteEntry(dateToDelete);
   } else {
     // Not one of our three management actions (e.g. this is a plain
     // devotion-creation issue). Exit quietly, generate-devotion.js handles those.

@@ -443,17 +443,10 @@ async function fetchDevotions(password) {
 }
 
 function editScriptureUrl(date, currentScripture) {
-  // Very long scripture text risks exceeding safe URL length limits when
-  // prefilled. Past a conservative cap, skip prefilling the text field
-  // rather than risk a truncated or broken link; the date still prefills.
-  const SAFE_PREFILL_LIMIT = 1500;
   const params = new URLSearchParams({
     template: 'edit-scripture.yml',
     date: date,
   });
-  if (currentScripture && currentScripture.length <= SAFE_PREFILL_LIMIT) {
-    params.set('new_scripture', currentScripture);
-  }
   return `https://github.com/${REPO}/issues/new?${params.toString()}`;
 }
 

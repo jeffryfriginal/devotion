@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -367,6 +367,9 @@
   }</style>
 </head>
 <body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode" style="position:fixed; top:16px; right:16px; z-index:200;">
+  <span class="knob">🌙</span>
+</button>
 <div id="passwordGate" class="password-gate">
   <div class="password-gate-box">
     <h2>Enter password</h2>
@@ -381,9 +384,6 @@
       <h1>Daily Devotion</h1>
       <p id="status">Loading…</p>
     </div>
-    <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
-      <span class="knob">☀️</span>
-    </button>
   </header>
   <div class="controls">
     <label for="sortOrder">Sort:</label>
@@ -662,7 +662,9 @@ function escapeHtml(str) {
 }
 
 // --- Dark mode ------------------------------------------------------------
-// No persistence: resets to light on every page load, per request.
+// No persistence: resets to dark on every page load, by default. Toggle
+// lives outside both the password gate and the unlocked wrap, so it's
+// visible and functional on both screens without duplicating markup.
 
 const themeToggle = document.getElementById('themeToggle');
 const themeKnob = themeToggle.querySelector('.knob');

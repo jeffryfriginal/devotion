@@ -184,7 +184,7 @@ function parseMDYY(input) {
 const parsedDate = parseMDYY(dateField);
 const date = parsedDate || todayISO();
 
-// --- Call Groq -------------------------------------------------------------
+// --- Call Gemini -------------------------------------------------------------
 
 const SYSTEM_PROMPT = `You write short daily devotions for a personal devotion app.
 You will be given a scripture reference and/or text. Produce exactly two sections: APPLICATION and PRAYER.
@@ -192,7 +192,7 @@ You will be given a scripture reference and/or text. Produce exactly two section
 Rules:
 - Match the language of your response to the language of the scripture input. If the scripture is in English, respond in English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog).
 - APPLICATION: 2-3 bullet points. Each point is exactly one sentence. Draw out the deeper spiritual implications of the passage rather than simply stating its obvious lesson. Pay attention to the context, tension, assumptions, commands, promises, warnings, or attitudes present in the passage when relevant. Show how the truth of the passage can challenge the way we think, respond, make decisions, or relate to God and others. Avoid generic Christian advice and avoid forcing an application that is not reasonably grounded in the passage. Each point should contain a meaningful insight and a practical implication while remaining natural and easy to understand.
-- PRAYER: 2-4 sentences, first person, sincere, tied to the application above, not generic.
+- PRAYER: 2 sentences, first person, sincere, tied to the application above, not generic.
 - Do not restate or quote the scripture back, that's handled separately. Focus only on application and prayer.
 - No preamble, no sign-off, no extra commentary.
 

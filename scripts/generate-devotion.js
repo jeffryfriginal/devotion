@@ -43,8 +43,8 @@ const scripture = extractField(ISSUE_BODY, "Scripture");
 const dateField = extractField(ISSUE_BODY, "Date \\(optional\\)");
 
 if (!scripture) {
-  // Not a devotion-creation issue (could be Edit Scripture, Edit Date, or
-  // Delete instead, those are handled by manage-devotion.js). Exit quietly
+  // Not a devotion-creation issue (could be Edit Scripture or Edit Date
+  // instead, those are handled by manage-devotion.js). Exit quietly
   // rather than failing, so both workflows can safely trigger on every
   // new issue without stepping on each other.
   console.log("No Scripture field found. Not a devotion-creation issue. Skipping.");

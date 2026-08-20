@@ -1,6 +1,6 @@
 // scripts/manage-devotion.js
 // Handles three actions via the Apps Script API (not a local devotions.json
-// file): edit scripture (reruns AI), edit date (move, no AI), delete.
+// file): edit scripture (reruns AI), edit date (move, no AI).
 
 const fs = require("fs");
 const path = require("path");
@@ -258,18 +258,6 @@ async function editDate(currentDateRaw, newDateRaw) {
   return result.message;
 }
 
-async function deleteEntry(dateRaw) {
-  const date = parseDateInput(dateRaw);
-  if (!date) {
-    throw new Error(
-      `Could not understand "${dateRaw}" as a date. Use YYYY-MM-DD or M-D-YY. Nothing was deleted.`
-    );
-  }
-
-  const result = await callAppsScript("delete", { date });
-  return result.message;
-}
-
 // --- Main: detect action from body fields ----------------------------------
 
 async function main() {
@@ -277,7 +265,6 @@ async function main() {
   const newScripture = extractField(ISSUE_BODY, "New Scripture Text");
   const currentDate = extractField(ISSUE_BODY, "Current Date");
   const newDate = extractField(ISSUE_BODY, "New Date");
-  const dateToDelete = extractField(ISSUE_BODY, "Date to Delete");
 
   let resultMessage;
 
@@ -285,10 +272,8 @@ async function main() {
     resultMessage = await editScripture(editScriptureDate, newScripture);
   } else if (currentDate && newDate) {
     resultMessage = await editDate(currentDate, newDate);
-  } else if (dateToDelete) {
-    resultMessage = await deleteEntry(dateToDelete);
   } else {
-    // Not one of our three management actions (e.g. this is a plain
+    // Not one of our two management actions (e.g. this is a plain
     // devotion-creation issue). Exit quietly, generate-devotion.js handles those.
     console.log("No management action detected in this issue. Skipping.");
     process.exit(0);

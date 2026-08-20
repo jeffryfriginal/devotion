@@ -228,13 +228,6 @@
   .entry-actions a:hover {
     background: var(--bg);
   }
-  .entry-actions a.delete-link {
-    color: #b3261e;
-    border-color: #e8b9b5;
-  }
-  .entry-actions a.delete-link:hover {
-    background: #fdf0ef;
-  }
   .section {
     margin-bottom: 18px;
   }
@@ -458,14 +451,6 @@ function editDateUrl(date) {
   return `https://github.com/${REPO}/issues/new?${params.toString()}`;
 }
 
-function deleteUrl(date) {
-  const params = new URLSearchParams({
-    template: 'delete.yml',
-    date_to_delete: date,
-  });
-  return `https://github.com/${REPO}/issues/new?${params.toString()}`;
-}
-
 function newDevotionUrl() {
   return `https://github.com/${REPO}/issues/new?template=devotion.yml`;
 }
@@ -518,7 +503,6 @@ function render() {
         <div class="entry-actions">
           <a href="${editScriptureUrl(d.date, d.scripture)}" target="_blank" rel="noopener">Edit Scripture</a>
           <a href="${editDateUrl(d.date)}" target="_blank" rel="noopener">Edit Date</a>
-          <a href="${deleteUrl(d.date)}" target="_blank" rel="noopener" class="delete-link">Delete</a>
         </div>
       </div>
       <div class="section scripture">

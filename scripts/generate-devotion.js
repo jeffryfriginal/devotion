@@ -201,7 +201,18 @@ Respond ONLY with strict JSON in this exact shape, nothing else, no markdown fen
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 
-async function generateDevotion(scriptureInput) {
+// Transient failures worth retrying: rate limits and server-side errors
+// (including "model overloaded"). NOT retried: 400/401/403/404, since those
+// are deterministic (bad key, bad request) and retrying just delays the
+// real failure without any chance of succeeding.
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+const MAX_RETRIES = 3;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGemini(scriptureInput) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const response = await fetch(url, {
     method: "POST",
@@ -217,10 +228,40 @@ async function generateDevotion(scriptureInput) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Gemini API error ${response.status}: ${text}`);
+    const err = new Error(`Gemini API error ${response.status}: ${text}`);
+    err.status = response.status;
+    throw err;
   }
 
-  const data = await response.json();
+  return response.json();
+}
+
+async function callGeminiWithRetry(scriptureInput) {
+  let lastErr;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await callGemini(scriptureInput);
+    } catch (err) {
+      lastErr = err;
+      // No `.status` means fetch itself threw (network blip, DNS, timeout),
+      // which is just as transient as a 503 and worth retrying the same way.
+      const isRetryable = !err.status || RETRYABLE_STATUS_CODES.has(err.status);
+      const attemptsLeft = MAX_RETRIES - attempt;
+
+      if (!isRetryable || attemptsLeft === 0) throw err;
+
+      const delayMs = 2000 * Math.pow(2, attempt) + Math.random() * 500;
+      console.log(
+        `Gemini call failed (${err.message}). Retrying in ${Math.round(delayMs / 1000)}s (${attemptsLeft} attempt(s) left)...`
+      );
+      await sleep(delayMs);
+    }
+  }
+  throw lastErr;
+}
+
+async function generateDevotion(scriptureInput) {
+  const data = await callGeminiWithRetry(scriptureInput);
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
   const cleaned = raw.replace(/```json|```/g, "").trim();

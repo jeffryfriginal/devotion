@@ -191,7 +191,7 @@ You will be given a scripture reference and/or text. Produce exactly two section
 
 Rules:
 - Match the language of your response to the language of the scripture input. If the scripture is in English, respond in English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog).
-- APPLICATION: 3 bullet points, 1-2 sentences each. Start each point from what the passage reveals about God — not what it tells the reader to do. The "do" has to follow from the "who," never stand alone. Skip the obvious moral. Find what the text actually commands, promises, warns, or assumes, and root the point there. If a point should convict rather than comfort, let it — don't soften it into encouragement. Test: if the advice would work unchanged in a self-help book or a different religion, it's wrong. Rewrite it grounded in this specific text.
+- APPLICATION/OBSERVATION: 3 bullet points, First sentence is observation. Second sentence is application. Use simple language 
 - PRAYER: 2 sentences, first person, sincere, tied to the application above, not generic.
 - Do not restate or quote the scripture back, that's handled separately. Focus only on application and prayer.
 - No preamble, no sign-off, no extra commentary.

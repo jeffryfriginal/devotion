@@ -187,18 +187,20 @@ const date = parsedDate || todayISO();
 // --- Call Gemini -------------------------------------------------------------
 
 const SYSTEM_PROMPT = `You write short daily devotions for a personal devotion app.
-You will be given a scripture reference and/or text. Produce exactly two sections: APPLICATION and PRAYER.
+You will be given a scripture reference and/or text. Produce exactly two sections: POINTS and PRAYER.
 
 Rules:
 - Match the language of your response to the language of the scripture input. If the scripture is in English, respond in English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog).
-- Write APPLICATION in third person. Refer to "a believer," "a person," "someone," or "people." Never use "you," "I," "we," or "our" in the application.
-- APPLICATION: exactly 3 bullet points. Each bullet is exactly two sentences. Sentence 1 (observation): Give the deeper meaning behind the passage, the thing that is easy to miss on a first read. Do not restate or paraphrase the verse. It can go beyond what the text says outright, as long as it follows from the passage's logic, context, tension, promise, command, or warning. Show how this truth actually plays out in ordinary daily life: in habits, reactions, decisions, relationships, work, money, or private thoughts. Sentence 2 (application): State concretely what a person should do about it and what needs to change. Name a specific attitude to drop, habit to start, or decision to make. Avoid vague advice like "trust God more" or "be more faithful.". Use simple, natural language. Avoid churchy filler, clichés, and generic Christian advice. 
-- PRAYER: 2 sentences, first person, sincere, tied to the application above, not generic.
-- Do not restate or quote the scripture back, that's handled separately. Focus only on application and prayer.
+- POINTS: exactly 3 points, written in third person. Refer to "a believer," "a person," "someone," or "people." Never use "you," "I," "we," or "our" in the points. Each point has exactly two fields, each exactly one sentence:
+  - "observation": the deeper meaning behind the passage, the thing that is easy to miss on a first read. Do not restate or paraphrase the verse. It can go beyond what the text says outright, as long as it follows from the passage's logic, context, tension, promise, command, or warning. Show how this truth actually plays out in ordinary daily life: in habits, reactions, decisions, relationships, work, money, or private thoughts.
+  - "application": what a person should concretely do about it and what needs to change. Name a specific attitude to drop, habit to start, or decision to make. Avoid vague advice like "trust God more" or "be more faithful."
+- Use simple, natural language. Avoid churchy filler, cliches, and generic Christian advice.
+- PRAYER: 2 sentences, first person, sincere, tied to the points above, not generic.
+- Do not restate or quote the scripture back, that's handled separately.
 - No preamble, no sign-off, no extra commentary.
 
-Respond ONLY with strict JSON in this exact shape, nothing else, no markdown fences:
-{"application": ["point one", "point two", "point three"], "prayer": "..."}`;
+Respond ONLY with JSON in this shape, with exactly 3 items in "points":
+{"points": [{"observation": "...", "application": "..."}], "prayer": "..."}`;
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 
@@ -224,6 +226,31 @@ async function callGemini(scriptureInput) {
     body: JSON.stringify({
       system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ parts: [{ text: `Scripture input:\n${scriptureInput}` }] }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            points: {
+              type: "ARRAY",
+              minItems: 3,
+              maxItems: 3,
+              items: {
+                type: "OBJECT",
+                properties: {
+                  observation: { type: "STRING" },
+                  application: { type: "STRING" },
+                },
+                required: ["observation", "application"],
+              },
+            },
+            prayer: { type: "STRING" },
+          },
+          required: ["points", "prayer"],
+        },
+      },
     }),
   });
 
@@ -263,7 +290,9 @@ async function callGeminiWithRetry(scriptureInput) {
 
 async function generateDevotion(scriptureInput) {
   const data = await callGeminiWithRetry(scriptureInput);
+  const finishReason = data.candidates?.[0]?.finishReason;
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  console.log(`Gemini finishReason: ${finishReason}`);
 
   const cleaned = raw.replace(/```json|```/g, "").trim();
 
@@ -271,12 +300,19 @@ async function generateDevotion(scriptureInput) {
   try {
     parsed = JSON.parse(cleaned);
   } catch (err) {
-    throw new Error(`Failed to parse model output as JSON. Raw output:\n${raw}`);
+    throw new Error(`Failed to parse model output as JSON (finishReason: ${finishReason}). Raw output:\n${raw}`);
   }
 
-  if (!Array.isArray(parsed.application) || parsed.application.length === 0 || !parsed.prayer) {
-    throw new Error(`Model output missing required fields, or application was not a non-empty array. Got: ${JSON.stringify(parsed)}`);
+  if (!Array.isArray(parsed.points) || parsed.points.length !== 3 || !parsed.prayer) {
+    throw new Error(`Model output missing required fields or did not return exactly 3 points. Got: ${JSON.stringify(parsed)}`);
   }
+
+  // The rest of the pipeline (Apps Script, the site) expects `application`
+  // as an array of strings, so join each observation + application pair.
+  parsed.application = parsed.points.map(
+    (p) => `${String(p.observation).trim()} ${String(p.application).trim()}`
+  );
+  delete parsed.points;
 
   // Scripture is never taken from the model. Whatever the user typed in the
   // issue form is used verbatim, guaranteeing accuracy instead of trusting

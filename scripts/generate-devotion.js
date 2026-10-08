@@ -1,6 +1,6 @@
 // scripts/generate-devotion.js
 // Reads the GitHub issue body (scripture text) from env, calls Google's
-// gemini-3.6-flash model, and writes the entry to a Google Sheet via the
+// Gemini model, and writes the entry to a Google Sheet via the
 // Apps Script API (not a local devotions.json file).
 
 const fs = require("fs");
@@ -88,73 +88,88 @@ const BIBLE_BOOKS = [
 // paragraph ending in a verse number can't be mistaken for 'reference-first'.
 const MAX_REF_PREFIX_LEN = 30;
 
+// Phone keyboards often turn " - " into " – " (en dash) or " — " (em dash),
+// so every dash check accepts all three.
+const DASH = "[-–—]";
+const RANGE = `(?:${DASH}\\d{1,3})?`;
+const REF_CORE = `\\d{1,3}:\\d{1,3}${RANGE}`;
+
+// Only used on references, never on verse text, so the verse stays verbatim.
+function tidyRef(ref) {
+  return ref.replace(/[–—]/g, "-");
+}
+
+function stripEdges(s) {
+  return s.replace(/^[\s\-–—:,]+/, "").replace(/[\s\-–—:,]+$/, "").trim();
+}
+
 function normalizeScripture(input) {
   const cleaned = input.replace(/\s+/g, " ").trim();
 
-  // Already correctly formatted as 'Reference - Text'. Language-agnostic,
-  // works regardless of what language the book name is in.
-  const alreadyFormatted = new RegExp(
-    `^.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?\\s*-\\s*\\S`
-  ).test(cleaned);
-  if (alreadyFormatted) return cleaned;
+  // Already 'Reference - Text', with any kind of dash as the separator.
+  // The separator must be followed by whitespace, otherwise
+  // "John 3:16-17 For God..." gets misread as reference "John 3:16"
+  // plus text "17 For God...".
+  const formatted = cleaned.match(
+    new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE})\\s*${DASH}\\s+(\\S.*)$`)
+  );
+  if (formatted) return `${tidyRef(formatted[1])} - ${formatted[2]}`;
 
   // Reference-first with no dash before the trailing text
   // ('Isaias 46:4 Ako ang...' or '2 Timothy 1:7 For the Spirit...').
   // Language-agnostic: no hardcoded book list needed for this case.
-  const refFirstMatch = cleaned.match(
-    new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?)\\s+(\\S.*)$`)
+  const refFirst = cleaned.match(
+    new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE})\\s+(\\S.*)$`)
   );
-  if (refFirstMatch) {
-    const [, reference, , rest] = refFirstMatch;
-    return `${reference} - ${rest}`;
+  if (refFirst) {
+    const rest = refFirst[2].replace(/^[\s\-–—:,]+/, "");
+    return `${tidyRef(refFirst[1])} - ${rest}`;
   }
 
-  // Bare reference only, nothing trailing. Leave as-is.
-  const bareRefMatch = cleaned.match(
-    new RegExp(`^.{1,${MAX_REF_PREFIX_LEN}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?$`)
-  );
-  if (bareRefMatch) return cleaned;
+  // Bare reference only, nothing trailing.
+  if (new RegExp(`^.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE}$`).test(cleaned)) {
+    return tidyRef(cleaned);
+  }
 
   // Text-first with a short language-agnostic reference at the very end
   // ('Verse text. Mga Taga-Filipos 2:3'). Match only the bounded tail
   // immediately before chapter:verse, not the whole paragraph.
-  const trailingRefMatch = cleaned.match(
-    new RegExp(`^(.+?)\\s+([^\\s.!?;][^.!?;]{0,${MAX_REF_PREFIX_LEN - 1}}?\\d{1,3}:\\d{1,3}(-\\d{1,3})?)$`)
+  const trailing = cleaned.match(
+    new RegExp(
+      `^(.+?)\\s+([^\\s.!?;][^.!?;]{0,${MAX_REF_PREFIX_LEN - 1}}?${REF_CORE})$`
+    )
   );
-  if (trailingRefMatch) {
-    const [, text, reference] = trailingRefMatch;
-    let rest = text;
-    rest = rest.replace(/^[\s\-–—:,]+/, "").replace(/[\s\-–—:,]+$/, "").trim();
+  if (trailing) {
+    const rest = stripEdges(trailing[1]);
+    const reference = tidyRef(trailing[2]);
     return rest ? `${reference} - ${rest}` : reference;
   }
 
   // Text-first, reference at the end (English only, needs the book list
   // since we can't otherwise tell where an embedded reference starts).
   const bookPattern = BIBLE_BOOKS.map((b) => b.replace(/\s+/g, "\\s+")).join("|");
-  const refPattern = new RegExp(
-    `(${bookPattern})\\s+\\d{1,3}:\\d{1,3}(-\\d{1,3})?`,
-    "i"
-  );
-  const match = cleaned.match(refPattern);
+  const match = cleaned.match(new RegExp(`(${bookPattern})\\s+${REF_CORE}`, "i"));
   if (!match) {
     // No recognizable reference found; leave input untouched rather than
     // guessing wrong.
     return cleaned;
   }
-  const reference = match[0];
-  let rest = cleaned.slice(0, match.index) + cleaned.slice(match.index + reference.length);
 
+  const reference = tidyRef(match[0]);
   // Strip leftover separators from where the reference used to sit.
   // Deliberately excludes '.' so a verse's real closing period is never eaten.
-  rest = rest.replace(/^[\s\-–—:,]+/, "").replace(/[\s\-–—:,]+$/, "").trim();
-
+  const rest = stripEdges(
+    cleaned.slice(0, match.index) + cleaned.slice(match.index + match[0].length)
+  );
   return rest ? `${reference} - ${rest}` : reference;
 }
 
 const normalizedScripture = normalizeScripture(scripture);
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  // en-CA formats as YYYY-MM-DD. Pinned to Manila so the runner's UTC
+  // clock doesn't push early-morning submissions onto yesterday's date.
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 }
 
 function isValidCalendarDate(year, month, day) {
@@ -202,6 +217,7 @@ Rules:
 Respond ONLY with JSON in this shape, with exactly 3 items in "points":
 {"points": [{"observation": "...", "application": "..."}], "prayer": "..."}`;
 
+// Confirm this ID against Google's current model list.
 const GEMINI_MODEL = "gemini-3.7-flash";
 
 // Transient failures worth retrying: rate limits and server-side errors

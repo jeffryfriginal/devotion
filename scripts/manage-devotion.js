@@ -142,7 +142,7 @@ Rules:
 Respond ONLY with JSON in this shape, with exactly 3 items in "points":
 {"points": [{"observation": "...", "application": "..."}], "prayer": "..."}`;
 
-const GEMINI_MODEL = "gemini-3.6-flash";
+const GEMINI_MODEL = "gemini-3.7-flash";
 
 async function generateApplicationAndPrayer(scriptureInput) {
   if (!GEMINI_API_KEY) {

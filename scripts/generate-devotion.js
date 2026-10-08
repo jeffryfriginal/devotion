@@ -202,7 +202,7 @@ Rules:
 Respond ONLY with JSON in this shape, with exactly 3 items in "points":
 {"points": [{"observation": "...", "application": "..."}], "prayer": "..."}`;
 
-const GEMINI_MODEL = "gemini-3.6-flash";
+const GEMINI_MODEL = "gemini-3.7-flash";
 
 // Transient failures worth retrying: rate limits and server-side errors
 // (including "model overloaded"). NOT retried: 400/401/403/404, since those

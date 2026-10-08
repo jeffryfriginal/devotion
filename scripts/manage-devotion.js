@@ -131,7 +131,7 @@ You will be given a scripture reference and/or text. Produce exactly two section
 
 Rules:
 - Match the language of your response to the language of the scripture input. If the scripture is in English, respond in English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog).
-- POINTS: exactly 3 points, written in third person. Refer to "a believer," "a person," "someone," or "people." Never use "you," "I," "we," or "our" in the points. Each point has exactly two fields, each exactly one sentence:
+- POINTS: exactly 3 points, written in first person plural. Use "we," "us," "our," "ours," and "ourselves." Never use "a believer," "a person," "someone," "people," "one," "you," or "I" in the points. Each point has exactly two fields, each exactly one sentence:
   - "observation": the deeper meaning behind the passage, the thing that is easy to miss on a first read. Do not restate or paraphrase the verse. It can go beyond what the text says outright, as long as it follows from the passage's logic, context, tension, promise, command, or warning. Show how this truth actually plays out in ordinary daily life: in habits, reactions, decisions, relationships, work, money, or private thoughts.
   - "application": what a person should concretely do about it and what needs to change. Name a specific attitude to drop, habit to start, or decision to make. Avoid vague advice like "trust God more" or "be more faithful."
 - Use simple, natural language. Avoid churchy filler, cliches, and generic Christian advice.

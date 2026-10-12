@@ -91,6 +91,7 @@
     font-size: 0.85rem;
     color: var(--muted);
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
   }
@@ -189,6 +190,48 @@
     border-radius: 50%;
     background: var(--accent);
     margin: 3px auto 0;
+  }
+  .write-panel label {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin: 0 0 6px;
+    font-weight: 600;
+  }
+  .write-panel label small {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+  }
+  .write-panel textarea {
+    resize: vertical;
+    line-height: 1.5;
+  }
+  .write-panel input[type="date"] {
+    width: auto;
+    min-width: 180px;
+    color-scheme: light dark;
+  }
+  .write-submit-btn {
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  .write-submit-btn:hover {
+    opacity: 0.9;
+  }
+  .write-error {
+    color: #b3261e;
+    font-size: 0.85rem;
+    margin: 0 0 10px;
+    min-height: 1.2em;
   }
   .entry {
     background: var(--card);
@@ -385,7 +428,20 @@
       <option value="oldest">Oldest first</option>
     </select>
     <a id="addNewLink" href="#" target="_blank" rel="noopener" class="add-new-btn">+ Add New Devotion</a>
+    <button id="writeToggle" class="calendar-toggle-btn" type="button">Write Manually</button>
     <button id="calendarToggle" class="calendar-toggle-btn" type="button">Show Calendar</button>
+  </div>
+  <div id="writePanel" class="calendar-panel write-panel" style="display:none;">
+    <label for="wScripture">Scripture</label>
+    <textarea id="wScripture" class="search-box" rows="3" placeholder="Book Chapter:Verse - text"></textarea>
+    <label for="wApplication">Application <small>(Enter adds a new bullet)</small></label>
+    <textarea id="wApplication" class="search-box" rows="5"></textarea>
+    <label for="wPrayer">Prayer <small>(optional)</small></label>
+    <textarea id="wPrayer" class="search-box" rows="3"></textarea>
+    <label for="wDate">Date <small>(optional, defaults to today)</small></label>
+    <input type="date" id="wDate" class="search-box" />
+    <div id="writeError" class="write-error"></div>
+    <button id="wSubmit" class="write-submit-btn" type="button">Continue to GitHub</button>
   </div>
   <div id="calendarPanel" class="calendar-panel" style="display:none;">
     <div class="calendar-nav">
@@ -529,10 +585,11 @@ function render() {
           ? `<ul class="application-list">${d.application.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ul>`
           : `<p>${escapeHtml(d.application)}</p>`}
       </div>
+      ${d.prayer ? `
       <div class="section">
         <h2>Prayer</h2>
         <p>${escapeHtml(d.prayer)}</p>
-      </div>
+      </div>` : ''}
     `;
     entriesEl.appendChild(entry);
   }
@@ -552,6 +609,77 @@ window.addEventListener('scroll', () => {
 
 backToTopBtn.addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// --- Manual entry -------------------------------------------------------
+// Builds a prefilled "Manual Devotion" GitHub issue. The actual write still
+// happens in Actions (owner-only, WRITE_API_KEY stays a secret), this panel
+// just gives a nicer way to compose the issue, including bullet-on-Enter.
+
+const writePanel = document.getElementById('writePanel');
+const writeToggleBtn = document.getElementById('writeToggle');
+const wScripture = document.getElementById('wScripture');
+const wApplication = document.getElementById('wApplication');
+const wPrayer = document.getElementById('wPrayer');
+const wDate = document.getElementById('wDate');
+const writeError = document.getElementById('writeError');
+
+writeToggleBtn.addEventListener('click', () => {
+  const isHidden = writePanel.style.display === 'none';
+  writePanel.style.display = isHidden ? 'block' : 'none';
+  writeToggleBtn.textContent = isHidden ? 'Hide Writer' : 'Write Manually';
+  if (isHidden) wScripture.focus();
+});
+
+wApplication.addEventListener('focus', () => {
+  if (!wApplication.value) {
+    wApplication.value = '- ';
+    wApplication.selectionStart = wApplication.selectionEnd = 2;
+  }
+});
+
+wApplication.addEventListener('blur', () => {
+  if (wApplication.value.trim() === '-') wApplication.value = '';
+});
+
+// beforeinput instead of keydown: mobile keyboards often report Enter as
+// keyCode 229 / "Unidentified" on keydown, which would silently break this.
+wApplication.addEventListener('beforeinput', (e) => {
+  if (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph') return;
+  e.preventDefault();
+  const s = wApplication.selectionStart;
+  const t = wApplication.selectionEnd;
+  wApplication.value = wApplication.value.slice(0, s) + '\n- ' + wApplication.value.slice(t);
+  wApplication.selectionStart = wApplication.selectionEnd = s + 3;
+});
+
+document.getElementById('wSubmit').addEventListener('click', () => {
+  const scripture = wScripture.value.trim();
+  const points = wApplication.value
+    .split('\n')
+    .map((l) => l.replace(/^\s*-\s*/, '').trim())
+    .filter(Boolean);
+
+  if (!scripture) {
+    writeError.textContent = 'Scripture is required.';
+    return;
+  }
+  if (points.length === 0) {
+    writeError.textContent = 'Add at least one application point.';
+    return;
+  }
+  writeError.textContent = '';
+
+  const params = new URLSearchParams({
+    template: 'manual-devotion.yml',
+    scripture,
+    application: points.map((p) => '- ' + p).join('\n'),
+  });
+  const prayer = wPrayer.value.trim();
+  if (prayer) params.set('prayer', prayer);
+  if (wDate.value) params.set('date', wDate.value); // YYYY-MM-DD, script accepts it
+
+  window.open(`https://github.com/${REPO}/issues/new?${params.toString()}`, '_blank', 'noopener');
 });
 
 // --- Calendar ---------------------------------------------------------

@@ -70,6 +70,11 @@ async function main() {
     throw new Error("Missing APPS_SCRIPT_URL or WRITE_API_KEY. Nothing was changed.");
   }
 
+  const scripture = normalizeQuotes(normalizeScripture(scriptureRaw));
+  if (!scripture) {
+    throw new Error("Scripture came out empty after normalizing. Check scripts/lib/scripture.js. Nothing was changed.");
+  }
+
   const application = parseApplication(extractField(ISSUE_BODY, "Manual Application"));
   if (application.length === 0) {
     throw new Error("Application is empty. Add at least one point. Nothing was changed.");
@@ -83,8 +88,9 @@ async function main() {
     body: JSON.stringify({
       apiKey: WRITE_API_KEY,
       action: "create",
+      manual: true,
       date,
-      scripture: normalizeQuotes(normalizeScripture(scriptureRaw)),
+      scripture,
       application: application.map(normalizeQuotes),
       prayer: normalizeQuotes(prayer),
       sourceIssue: ISSUE_NUMBER,

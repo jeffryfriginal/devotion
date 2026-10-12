@@ -233,6 +233,13 @@
     margin: 0 0 10px;
     min-height: 1.2em;
   }
+  .write-error.ok {
+    color: #3d8b5a;
+  }
+  .write-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
   .entry {
     background: var(--card);
     border: 1px solid var(--border);
@@ -441,7 +448,7 @@
     <label for="wDate">Date <small>(optional, defaults to today)</small></label>
     <input type="date" id="wDate" class="search-box" />
     <div id="writeError" class="write-error"></div>
-    <button id="wSubmit" class="write-submit-btn" type="button">Continue to GitHub</button>
+    <button id="wSubmit" class="write-submit-btn" type="button">Save Devotion</button>
   </div>
   <div id="calendarPanel" class="calendar-panel" style="display:none;">
     <div class="calendar-nav">
@@ -468,6 +475,7 @@ const REPO = 'jeffryfriginal/devotion';
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz36LFzjUqpmZGlZqwnLqsFNpNWIRhYLH2XMl72CQAdGb8TzLLpdDqdFwLXJtsXqLXy1A/exec';
 
 let devotions = [];
+let sitePassword = ''; // held in memory only, set after a successful unlock
 
 async function fetchDevotions(password) {
   const statusEl = document.getElementById('status');
@@ -493,12 +501,12 @@ async function fetchDevotions(password) {
 
   if (!Array.isArray(data.data) || data.data.length === 0) {
     devotions = [];
-    statusEl.textContent = 'No devotions yet.';
+    if (statusEl) statusEl.textContent = 'No devotions yet.';
     return;
   }
 
   devotions = data.data;
-  statusEl.remove();
+  if (statusEl) statusEl.remove();
   render();
   if (panel.style.display !== 'none') {
     renderCalendar();
@@ -612,9 +620,9 @@ backToTopBtn.addEventListener('click', () => {
 });
 
 // --- Manual entry -------------------------------------------------------
-// Builds a prefilled "Manual Devotion" GitHub issue. The actual write still
-// happens in Actions (owner-only, WRITE_API_KEY stays a secret), this panel
-// just gives a nicer way to compose the issue, including bullet-on-Enter.
+// Saves straight to Apps Script using the site password you already typed
+// to unlock the page. No GitHub issue, no workflow. The server validates and
+// normalizes everything, and this action can only CREATE a manual entry.
 
 const writePanel = document.getElementById('writePanel');
 const writeToggleBtn = document.getElementById('writeToggle');
@@ -653,7 +661,14 @@ wApplication.addEventListener('beforeinput', (e) => {
   wApplication.selectionStart = wApplication.selectionEnd = s + 3;
 });
 
-document.getElementById('wSubmit').addEventListener('click', () => {
+const wSubmit = document.getElementById('wSubmit');
+
+function showWriteMessage(text, ok) {
+  writeError.textContent = text;
+  writeError.className = ok ? 'write-error ok' : 'write-error';
+}
+
+wSubmit.addEventListener('click', async () => {
   const scripture = wScripture.value.trim();
   const points = wApplication.value
     .split('\n')
@@ -661,25 +676,56 @@ document.getElementById('wSubmit').addEventListener('click', () => {
     .filter(Boolean);
 
   if (!scripture) {
-    writeError.textContent = 'Scripture is required.';
+    showWriteMessage('Scripture is required.', false);
     return;
   }
   if (points.length === 0) {
-    writeError.textContent = 'Add at least one application point.';
+    showWriteMessage('Add at least one application point.', false);
     return;
   }
-  writeError.textContent = '';
 
-  const params = new URLSearchParams({
-    template: 'manual-devotion.yml',
-    scripture,
-    application: points.map((p) => '- ' + p).join('\n'),
-  });
-  const prayer = wPrayer.value.trim();
-  if (prayer) params.set('prayer', prayer);
-  if (wDate.value) params.set('date', wDate.value); // YYYY-MM-DD, script accepts it
+  wSubmit.disabled = true;
+  wSubmit.textContent = 'Saving...';
+  showWriteMessage('', false);
 
-  window.open(`https://github.com/${REPO}/issues/new?${params.toString()}`, '_blank', 'noopener');
+  try {
+    // text/plain keeps this a "simple" request so the browser skips the CORS
+    // preflight, which Apps Script web apps cannot answer.
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'manualCreate',
+        password: sitePassword,
+        scripture,
+        application: points.join('\n'),
+        prayer: wPrayer.value.trim(),
+        date: wDate.value, // YYYY-MM-DD or blank
+      }),
+    });
+    if (!res.ok) throw new Error(`Server error (${res.status}).`);
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      throw new Error('Server returned an unreadable response.');
+    }
+    if (!data.success) throw new Error(data.error || 'Could not save.');
+
+    wScripture.value = '';
+    wApplication.value = '';
+    wPrayer.value = '';
+    wDate.value = '';
+    showWriteMessage(data.message || 'Saved.', true);
+    await fetchDevotions(sitePassword);
+  } catch (err) {
+    showWriteMessage(err.message || 'Could not save. Try again.', false);
+    console.error(err);
+  } finally {
+    wSubmit.disabled = false;
+    wSubmit.textContent = 'Save Devotion';
+  }
 });
 
 // --- Calendar ---------------------------------------------------------
@@ -828,6 +874,7 @@ async function tryUnlock() {
 
   try {
     await fetchDevotions(typed);
+    sitePassword = typed;
     gateEl.style.display = 'none';
     wrapEl.classList.add('unlocked');
   } catch (err) {

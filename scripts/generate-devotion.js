@@ -167,9 +167,7 @@ function normalizeScripture(input) {
 const normalizedScripture = normalizeScripture(scripture);
 
 function todayISO() {
-  // en-CA formats as YYYY-MM-DD. Pinned to Manila so the runner's UTC
-  // clock doesn't push early-morning submissions onto yesterday's date.
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date());
 }
 
 function isValidCalendarDate(year, month, day) {

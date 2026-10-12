@@ -1,0 +1,35 @@
+name: Manual Devotion
+description: Write a devotion yourself. No AI involved.
+title: "Manual Devotion"
+body:
+  - type: textarea
+    id: scripture
+    attributes:
+      label: Manual Scripture
+      description: Reference and/or text, any order. Same formatting rules as the AI flow.
+      placeholder: "Book Chapter:Verse - text"
+    validations:
+      required: true
+  - type: textarea
+    id: application
+    attributes:
+      label: Manual Application
+      description: One point per line. Leading dashes or numbers are stripped.
+      placeholder: "- First point\n- Second point"
+    validations:
+      required: true
+  - type: textarea
+    id: prayer
+    attributes:
+      label: Manual Prayer (optional)
+      description: Leave blank to skip.
+    validations:
+      required: false
+  - type: input
+    id: date
+    attributes:
+      label: Manual Date (optional)
+      description: M-D-YY or YYYY-MM-DD. Defaults to today (Manila time).
+      placeholder: "10-5-26"
+    validations:
+      required: false

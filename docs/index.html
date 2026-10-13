@@ -480,11 +480,18 @@ let sitePassword = ''; // held in memory only, set after a successful unlock
 
 async function fetchDevotions(password) {
   const statusEl = document.getElementById('status');
-  const url = `${APPS_SCRIPT_URL}?password=${encodeURIComponent(password)}`;
 
   let res;
   try {
-    res = await fetch(url, { cache: 'no-store' });
+    // POST with a text/plain body: keeps the password out of the URL (so it
+    // never lands in history or request logs) and skips the CORS preflight,
+    // which Apps Script web apps cannot answer.
+    res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'list', password }),
+      cache: 'no-store',
+    });
   } catch (networkErr) {
     throw new Error('Could not reach the server. Check your connection.');
   }
@@ -855,11 +862,9 @@ themeToggle.addEventListener('click', () => {
 });
 
 // --- Password gate ----------------------------------------------------
-// Real server-side check now: the typed password is sent to Apps Script,
+// Real server-side check: the typed password is POSTed to Apps Script,
 // which validates it against SITE_PASSWORD stored in Script Properties
-// (never in this file) and only returns data if it's correct. Unlike the
-// old client-side-only version, there is no password to find in page
-// source anymore, and there's no separate public data file to bypass to.
+// (never in this file) and only returns data if it's correct.
 
 const gateEl = document.getElementById('passwordGate');
 const wrapEl = document.getElementById('mainWrap');

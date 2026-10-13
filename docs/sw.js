@@ -2,6 +2,8 @@
 // cross-origin POSTs, which this worker never touches, so devotions and the
 // password are never stored on the device by this file.
 //
+// Cache storage is shared by every app on jeffryfriginal.github.io, so only
+// ever delete our own "devotion-shell-*" caches, never anyone else's.
 // Bump CACHE when you change the shell list below.
 const CACHE = "devotion-shell-v1";
 const SHELL = [
@@ -23,7 +25,13 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k.startsWith("devotion-shell-") && k !== CACHE)
+            .map((k) => caches.delete(k))
+        )
+      )
       .then(() => self.clients.claim())
   );
 });

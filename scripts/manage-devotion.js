@@ -1,6 +1,6 @@
 // scripts/manage-devotion.js
 // Handles three actions via the Apps Script API (not a local devotions.json
-// file): edit scripture (reruns AI), edit date (move, no AI).
+// file): edit scripture (reruns AI), edit date (move, no AI), delete.
 
 const fs = require("fs");
 const path = require("path");
@@ -19,9 +19,6 @@ if (ISSUE_AUTHOR.toLowerCase() !== OWNER_USERNAME.toLowerCase()) {
   console.log(`Issue author "${ISSUE_AUTHOR}" is not the site owner. Skipping.`);
   process.exit(0);
 }
-
-// (APPS_SCRIPT_URL / WRITE_API_KEY are checked inside callAppsScript, not
-// here, so this script can still safely no-op on non-management issues.)
 
 function extractField(body, label) {
   const re = new RegExp(`### ${label}\\s*\\n+([\\s\\S]*?)(?=\\n### |$)`, "i");
@@ -69,10 +66,9 @@ const BIBLE_BOOKS = [
   "Malachi", "Matthew", "Mark", "Luke", "John", "Acts", "Romans",
   "Galatians", "Ephesians", "Philippians", "Colossians", "Titus",
   "Philemon", "Hebrews", "James", "Jude", "Revelation", "Revelations",
-].sort((a, b) => b.length - a.length);
+]
+  .sort((a, b) => b.length - a.length);
 
-// A real book name + chapter:verse is short. Cap the prefix so a whole
-// paragraph ending in a verse number can't be mistaken for 'reference-first'.
 const MAX_REF_PREFIX_LEN = 30;
 
 // Phone keyboards often turn " - " into " – " (en dash) or " — " (em dash),
@@ -81,7 +77,6 @@ const DASH = "[-–—]";
 const RANGE = `(?:${DASH}\\d{1,3})?`;
 const REF_CORE = `\\d{1,3}:\\d{1,3}${RANGE}`;
 
-// Only used on references, never on verse text, so the verse stays verbatim.
 function tidyRef(ref) {
   return ref.replace(/[–—]/g, "-");
 }
@@ -93,16 +88,11 @@ function stripEdges(s) {
 function normalizeScripture(input) {
   const cleaned = input.replace(/\s+/g, " ").trim();
 
-  // Already 'Reference - Text', with any kind of dash as the separator.
-  // The separator must be followed by whitespace, otherwise
-  // "John 3:16-17 For God..." gets misread as reference "John 3:16"
-  // plus text "17 For God...".
   const formatted = cleaned.match(
     new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE})\\s*${DASH}\\s+(\\S.*)$`)
   );
   if (formatted) return `${tidyRef(formatted[1])} - ${formatted[2]}`;
 
-  // Reference-first with no dash before the trailing text.
   const refFirst = cleaned.match(
     new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE})\\s+(\\S.*)$`)
   );
@@ -111,14 +101,10 @@ function normalizeScripture(input) {
     return `${tidyRef(refFirst[1])} - ${rest}`;
   }
 
-  // Bare reference only, nothing trailing.
   if (new RegExp(`^.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE}$`).test(cleaned)) {
     return tidyRef(cleaned);
   }
 
-  // Text-first with a short language-agnostic reference at the very end
-  // ('Verse text. Mga Taga-Filipos 2:3'). Match only the bounded tail
-  // immediately before chapter:verse, not the whole paragraph.
   const trailing = cleaned.match(
     new RegExp(
       `^(.+?)\\s+([^\\s.!?;][^.!?;]{0,${MAX_REF_PREFIX_LEN - 1}}?${REF_CORE})$`
@@ -130,7 +116,6 @@ function normalizeScripture(input) {
     return rest ? `${reference} - ${rest}` : reference;
   }
 
-  // Text-first, reference at the end (English only, needs the book list).
   const bookPattern = BIBLE_BOOKS.map((b) => b.replace(/\s+/g, "\\s+")).join("|");
   const match = cleaned.match(new RegExp(`(${bookPattern})\\s+${REF_CORE}`, "i"));
   if (!match) return cleaned;
@@ -142,38 +127,43 @@ function normalizeScripture(input) {
   return rest ? `${reference} - ${rest}` : reference;
 }
 
-function normalizeQuotes(str) {
-  if (!str) return str;
-  return str.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
-}
-
-// --- AI call for application/prayer (same as generate-devotion.js) -------
-
 const SYSTEM_PROMPT = `You write short daily devotions for a personal devotion app.
 You will be given a scripture reference and/or text. Produce exactly two sections: POINTS and PRAYER.
 
 Rules:
 - Match the language of your response to the language of the scripture input. If the scripture is in English, respond in English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog).
-- POINTS: exactly 3 points, written in first person plural. Use "we," "us," "our," "ours," and "ourselves." Never use "a believer," "a person," "someone," "people," "one," "you," or "I" in the points. Each point has exactly two fields, each exactly one sentence:
-  - "observation": the deeper meaning behind the passage, the thing that is easy to miss on a first read. Do not restate or paraphrase the verse. It can go beyond what the text says outright, as long as it follows from the passage's logic, context, tension, promise, command, or warning. Show how this truth actually plays out in ordinary daily life: in habits, reactions, decisions, relationships, work, money, or private thoughts.
-  - "application": what a person should concretely do about it and what needs to change. Name a specific attitude to drop, habit to start, or decision to make. Avoid vague advice like "trust God more" or "be more faithful."
-- Use simple, natural language. Avoid churchy filler, cliches, and generic Christian advice.
+- POINTS: exactly 3 points, each one a short paragraph of 2 to 4 sentences. Write like a friend sharing a reflection in a small group, not like a sermon or a commentary. Always in first person plural: "we," "us," "our," "natin," "tayo." Never use "you," "I," "a believer," "a person," "someone," or "people."
+  - Each point should start from a truth in the passage, then move straight into what it means for how we live and what we should do about it, all in the same flow. No labels, no separate observation and application parts.
+  - Name the real, specific things we go through: fear of failure, rejection, uncertainty about the future, pride, worry about money, comparing ourselves to others, holding grudges. Pick what fits the passage. Don't stay abstract.
+  - Be direct about what to do. Use inclusive commands like "isuko natin," "ibigay natin," "let's stop," "huwag tayong." Name a concrete attitude to drop or a habit to start. Avoid vague lines like "trust God more."
+  - Language style: natural Taglish the way people actually talk, switching between Tagalog and English mid-sentence. Simple everyday words. Plain spoken grammar is fine, it doesn't need to sound polished. If the scripture is in English, use the same conversational voice in plain English instead.
+  - Mix sentence lengths. A longer sentence that explains, then a short one that lands. It's fine to end a point with a short punchy line like "Don't let fear control us."
+  - Refer to God as "the Lord," "God," "Diyos," or "Siya." No churchy filler, cliches, or generic Christian advice. Stay grounded in what the passage actually says or implies. Don't restate the verse.
 - PRAYER: 2 sentences, first person, sincere, tied to the points above, not generic.
 - Do not restate or quote the scripture back, that's handled separately.
 - No preamble, no sign-off, no extra commentary.
 
-Respond ONLY with JSON in this shape, with exactly 3 items in "points":
-{"points": [{"observation": "...", "application": "..."}], "prayer": "..."}`;
+Respond ONLY with JSON in this shape, with exactly 3 strings in "points":
+{"points": ["...", "...", "..."], "prayer": "..."}`;
 
-// Keep in sync with generate-devotion.js and confirm against Google's
-// current model list.
+function normalizeQuotes(str) {
+  if (!str) return str;
+  return str.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+}
+
+// --- AI call for points/prayer (same as generate-devotion.js) ------------
+
+// Confirm this ID against Google's current model list.
 const GEMINI_MODEL = "gemini-3.7-flash";
 
-async function generateApplicationAndPrayer(scriptureInput) {
-  if (!GEMINI_API_KEY) {
-    throw new Error("Missing GEMINI_API_KEY env var. Nothing was changed.");
-  }
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+const MAX_RETRIES = 3;
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGemini(scriptureInput) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const response = await fetch(url, {
     method: "POST",
@@ -195,14 +185,7 @@ async function generateApplicationAndPrayer(scriptureInput) {
               type: "ARRAY",
               minItems: 3,
               maxItems: 3,
-              items: {
-                type: "OBJECT",
-                properties: {
-                  observation: { type: "STRING" },
-                  application: { type: "STRING" },
-                },
-                required: ["observation", "application"],
-              },
+              items: { type: "STRING" },
             },
             prayer: { type: "STRING" },
           },
@@ -214,13 +197,46 @@ async function generateApplicationAndPrayer(scriptureInput) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Gemini API error ${response.status}: ${text}`);
+    const err = new Error(`Gemini API error ${response.status}: ${text}`);
+    err.status = response.status;
+    throw err;
   }
 
-  const data = await response.json();
+  return response.json();
+}
+
+async function callGeminiWithRetry(scriptureInput) {
+  let lastErr;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await callGemini(scriptureInput);
+    } catch (err) {
+      lastErr = err;
+      const isRetryable = !err.status || RETRYABLE_STATUS_CODES.has(err.status);
+      const attemptsLeft = MAX_RETRIES - attempt;
+
+      if (!isRetryable || attemptsLeft === 0) throw err;
+
+      const delayMs = 2000 * Math.pow(2, attempt) + Math.random() * 500;
+      console.log(
+        `Gemini call failed (${err.message}). Retrying in ${Math.round(delayMs / 1000)}s (${attemptsLeft} attempt(s) left)...`
+      );
+      await sleep(delayMs);
+    }
+  }
+  throw lastErr;
+}
+
+async function generateApplicationAndPrayer(scriptureInput) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY env var. Nothing was changed.");
+  }
+
+  const data = await callGeminiWithRetry(scriptureInput);
   const finishReason = data.candidates?.[0]?.finishReason;
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   console.log(`Gemini finishReason: ${finishReason}`);
+
   const cleaned = raw.replace(/```json|```/g, "").trim();
 
   let parsed;
@@ -230,18 +246,19 @@ async function generateApplicationAndPrayer(scriptureInput) {
     throw new Error(`Failed to parse model output as JSON (finishReason: ${finishReason}). Raw output:\n${raw}`);
   }
 
-  if (!Array.isArray(parsed.points) || parsed.points.length !== 3 || !parsed.prayer) {
-    throw new Error(`Model output missing required fields or did not return exactly 3 points. Got: ${JSON.stringify(parsed)}`);
+  if (
+    !Array.isArray(parsed.points) ||
+    parsed.points.length !== 3 ||
+    !parsed.points.every((p) => typeof p === "string" && p.trim()) ||
+    !parsed.prayer
+  ) {
+    throw new Error(`Model output missing required fields or did not return exactly 3 text points. Got: ${JSON.stringify(parsed)}`);
   }
 
-  // The rest of the pipeline expects `application` as an array of strings,
-  // so join each observation + application pair.
-  parsed.application = parsed.points.map(
-    (p) => `${String(p.observation).trim()} ${String(p.application).trim()}`
-  );
-  delete parsed.points;
-
-  return parsed;
+  return {
+    application: parsed.points.map((p) => p.trim()),
+    prayer: parsed.prayer,
+  };
 }
 
 // --- Action handlers -------------------------------------------------------
@@ -268,9 +285,8 @@ async function editScripture(dateRaw, newScriptureRaw) {
 }
 
 function isValidCalendarDate(year, month, day) {
-  // Guards against things like month=13 or day=32 slipping through as
-  // "valid-looking" strings. JS Date normalizes overflow silently (e.g.
-  // 2026-02-30 becomes March 2), so we check it round-trips exactly.
+  // JS Date normalizes overflow silently (2026-02-30 becomes March 2),
+  // so require an exact round trip.
   const d = new Date(year, month - 1, day);
   return (
     d.getFullYear() === year &&
@@ -282,14 +298,12 @@ function isValidCalendarDate(year, month, day) {
 function parseDateInput(input) {
   const cleaned = String(input || "").trim();
 
-  // Accept strict ISO format: YYYY-MM-DD
   const isoMatch = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) {
     const [, y, m, d] = isoMatch.map(Number);
     return isValidCalendarDate(y, m, d) ? cleaned : null;
   }
 
-  // Accept the same M-D-YY shorthand used when creating devotions.
   const shortMatch = cleaned.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
   if (shortMatch) {
     const [, m, d, yy] = shortMatch.map(Number);
@@ -320,6 +334,18 @@ async function editDate(currentDateRaw, newDateRaw) {
   return result.message;
 }
 
+async function deleteEntry(dateRaw) {
+  const date = parseDateInput(dateRaw);
+  if (!date) {
+    throw new Error(
+      `Could not understand "${dateRaw}" as a date. Use YYYY-MM-DD or M-D-YY. Nothing was deleted.`
+    );
+  }
+
+  const result = await callAppsScript("delete", { date });
+  return result.message;
+}
+
 // --- Main: detect action from body fields ----------------------------------
 
 async function main() {
@@ -327,6 +353,7 @@ async function main() {
   const newScripture = extractField(ISSUE_BODY, "New Scripture Text");
   const currentDate = extractField(ISSUE_BODY, "Current Date");
   const newDate = extractField(ISSUE_BODY, "New Date");
+  const dateToDelete = extractField(ISSUE_BODY, "Date to Delete");
 
   let resultMessage;
 
@@ -334,9 +361,11 @@ async function main() {
     resultMessage = await editScripture(editScriptureDate, newScripture);
   } else if (currentDate && newDate) {
     resultMessage = await editDate(currentDate, newDate);
+  } else if (dateToDelete) {
+    resultMessage = await deleteEntry(dateToDelete);
   } else {
-    // Not one of our two management actions (e.g. this is a plain
-    // devotion-creation issue). Exit quietly, generate-devotion.js handles those.
+    // Not one of our three management actions (e.g. a plain devotion
+    // creation issue). generate-devotion.js handles those.
     console.log("No management action detected in this issue. Skipping.");
     process.exit(0);
   }

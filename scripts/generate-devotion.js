@@ -22,14 +22,6 @@ if (ISSUE_AUTHOR.toLowerCase() !== OWNER_USERNAME.toLowerCase()) {
 }
 
 // --- Parse the issue form body -------------------------------------------
-// GitHub issue forms render fields as markdown, roughly:
-// ### Scripture
-//
-// <the text>
-//
-// ### Date (optional)
-//
-// <the text or "_No response_">
 
 function extractField(body, label) {
   const re = new RegExp(`### ${label}\\s*\\n+([\\s\\S]*?)(?=\\n### |$)`, "i");
@@ -43,10 +35,9 @@ const scripture = extractField(ISSUE_BODY, "Scripture");
 const dateField = extractField(ISSUE_BODY, "Date \\(optional\\)");
 
 if (!scripture) {
-  // Not a devotion-creation issue (could be Edit Scripture or Edit Date
-  // instead, those are handled by manage-devotion.js). Exit quietly
-  // rather than failing, so both workflows can safely trigger on every
-  // new issue without stepping on each other.
+  // Not a devotion-creation issue (could be Edit Scripture, Edit Date, or
+  // Delete, those are handled by manage-devotion.js). Exit quietly so both
+  // workflows can safely trigger on every new issue.
   console.log("No Scripture field found. Not a devotion-creation issue. Skipping.");
   process.exit(0);
 }
@@ -62,9 +53,8 @@ if (!APPS_SCRIPT_URL || !WRITE_API_KEY) {
 }
 
 // --- Normalize scripture input into "Reference - Verse text" -------------
-// Accepts input in any order/format (reference first, text first, with or
-// without a dash) and reassembles it consistently. Uses pattern matching
-// only, never the AI, so the original wording is never paraphrased.
+// Pattern matching only, never the AI, so the original wording is never
+// paraphrased.
 
 const BIBLE_BOOKS = [
   "1 Chronicles", "2 Chronicles", "1 Corinthians", "2 Corinthians",
@@ -80,12 +70,8 @@ const BIBLE_BOOKS = [
   "Galatians", "Ephesians", "Philippians", "Colossians", "Titus",
   "Philemon", "Hebrews", "James", "Jude", "Revelation", "Revelations",
 ]
-  // Longest names first so "Song of Solomon" matches before a shorter
-  // partial book name could.
   .sort((a, b) => b.length - a.length);
 
-// A real book name + chapter:verse is short. Cap the prefix so a whole
-// paragraph ending in a verse number can't be mistaken for 'reference-first'.
 const MAX_REF_PREFIX_LEN = 30;
 
 // Phone keyboards often turn " - " into " – " (en dash) or " — " (em dash),
@@ -94,7 +80,6 @@ const DASH = "[-–—]";
 const RANGE = `(?:${DASH}\\d{1,3})?`;
 const REF_CORE = `\\d{1,3}:\\d{1,3}${RANGE}`;
 
-// Only used on references, never on verse text, so the verse stays verbatim.
 function tidyRef(ref) {
   return ref.replace(/[–—]/g, "-");
 }
@@ -106,18 +91,11 @@ function stripEdges(s) {
 function normalizeScripture(input) {
   const cleaned = input.replace(/\s+/g, " ").trim();
 
-  // Already 'Reference - Text', with any kind of dash as the separator.
-  // The separator must be followed by whitespace, otherwise
-  // "John 3:16-17 For God..." gets misread as reference "John 3:16"
-  // plus text "17 For God...".
   const formatted = cleaned.match(
     new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE})\\s*${DASH}\\s+(\\S.*)$`)
   );
   if (formatted) return `${tidyRef(formatted[1])} - ${formatted[2]}`;
 
-  // Reference-first with no dash before the trailing text
-  // ('Isaias 46:4 Ako ang...' or '2 Timothy 1:7 For the Spirit...').
-  // Language-agnostic: no hardcoded book list needed for this case.
   const refFirst = cleaned.match(
     new RegExp(`^(.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE})\\s+(\\S.*)$`)
   );
@@ -126,14 +104,10 @@ function normalizeScripture(input) {
     return `${tidyRef(refFirst[1])} - ${rest}`;
   }
 
-  // Bare reference only, nothing trailing.
   if (new RegExp(`^.{1,${MAX_REF_PREFIX_LEN}}?${REF_CORE}$`).test(cleaned)) {
     return tidyRef(cleaned);
   }
 
-  // Text-first with a short language-agnostic reference at the very end
-  // ('Verse text. Mga Taga-Filipos 2:3'). Match only the bounded tail
-  // immediately before chapter:verse, not the whole paragraph.
   const trailing = cleaned.match(
     new RegExp(
       `^(.+?)\\s+([^\\s.!?;][^.!?;]{0,${MAX_REF_PREFIX_LEN - 1}}?${REF_CORE})$`
@@ -145,19 +119,11 @@ function normalizeScripture(input) {
     return rest ? `${reference} - ${rest}` : reference;
   }
 
-  // Text-first, reference at the end (English only, needs the book list
-  // since we can't otherwise tell where an embedded reference starts).
   const bookPattern = BIBLE_BOOKS.map((b) => b.replace(/\s+/g, "\\s+")).join("|");
   const match = cleaned.match(new RegExp(`(${bookPattern})\\s+${REF_CORE}`, "i"));
-  if (!match) {
-    // No recognizable reference found; leave input untouched rather than
-    // guessing wrong.
-    return cleaned;
-  }
+  if (!match) return cleaned;
 
   const reference = tidyRef(match[0]);
-  // Strip leftover separators from where the reference used to sit.
-  // Deliberately excludes '.' so a verse's real closing period is never eaten.
   const rest = stripEdges(
     cleaned.slice(0, match.index) + cleaned.slice(match.index + match[0].length)
   );
@@ -171,8 +137,6 @@ function todayISO() {
 }
 
 function isValidCalendarDate(year, month, day) {
-  // JavaScript Date silently normalizes invalid dates, so require an exact
-  // round trip before accepting user input.
   const d = new Date(year, month - 1, day);
   return (
     d.getFullYear() === year &&
@@ -204,27 +168,23 @@ You will be given a scripture reference and/or text. Produce exactly two section
 
 Rules:
 - Match the language of your response to the language of the scripture input. If the scripture is in English, respond in English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog).
-- POINTS: 2 to 3 points, each one a short paragraph of 2 to 4 sentences. Write like a friend sharing a reflection in a small group, not like a sermon or a commentary. Always in first person plural: "we," "us," "our," "natin," "tayo." Never use "you," "I," "a believer," "a person," "someone," or "people."
-  - Each point should start from a truth in the passage, then move straight into what it means for how we live and what we should do about it, all in the same flow. No labels, no separate "observation" and "application" parts.
+- POINTS: exactly 3 points, each one a short paragraph of 2 to 4 sentences. Write like a friend sharing a reflection in a small group, not like a sermon or a commentary. Always in first person plural: "we," "us," "our," "natin," "tayo." Never use "you," "I," "a believer," "a person," "someone," or "people."
+  - Each point should start from a truth in the passage, then move straight into what it means for how we live and what we should do about it, all in the same flow. No labels, no separate observation and application parts.
   - Name the real, specific things we go through: fear of failure, rejection, uncertainty about the future, pride, worry about money, comparing ourselves to others, holding grudges. Pick what fits the passage. Don't stay abstract.
   - Be direct about what to do. Use inclusive commands like "isuko natin," "ibigay natin," "let's stop," "huwag tayong." Name a concrete attitude to drop or a habit to start. Avoid vague lines like "trust God more."
   - Language style: natural Taglish the way people actually talk, switching between Tagalog and English mid-sentence. Simple everyday words. Plain spoken grammar is fine, it doesn't need to sound polished. If the scripture is in English, use the same conversational voice in plain English instead.
   - Mix sentence lengths. A longer sentence that explains, then a short one that lands. It's fine to end a point with a short punchy line like "Don't let fear control us."
-  - Refer to God as "the Lord," "God," "Diyos," or "Siya." No churchy filler, cliches, or generic Christian advice. Stay grounded in what the passage actually says or implies. Don't restate the verse.- Use simple, natural language. Avoid churchy filler, cliches, and generic Christian advice.
+  - Refer to God as "the Lord," "God," "Diyos," or "Siya." No churchy filler, cliches, or generic Christian advice. Stay grounded in what the passage actually says or implies. Don't restate the verse.
 - PRAYER: 2 sentences, first person, sincere, tied to the points above, not generic.
 - Do not restate or quote the scripture back, that's handled separately.
 - No preamble, no sign-off, no extra commentary.
 
-Respond ONLY with JSON in this shape, with exactly 3 items in "points":
-{"points": [{"observation": "...", "application": "..."}], "prayer": "..."}`;
+Respond ONLY with JSON in this shape, with exactly 3 strings in "points":
+{"points": ["...", "...", "..."], "prayer": "..."}`;
 
 // Confirm this ID against Google's current model list.
 const GEMINI_MODEL = "gemini-3.7-flash";
 
-// Transient failures worth retrying: rate limits and server-side errors
-// (including "model overloaded"). NOT retried: 400/401/403/404, since those
-// are deterministic (bad key, bad request) and retrying just delays the
-// real failure without any chance of succeeding.
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const MAX_RETRIES = 3;
 
@@ -254,14 +214,7 @@ async function callGemini(scriptureInput) {
               type: "ARRAY",
               minItems: 3,
               maxItems: 3,
-              items: {
-                type: "OBJECT",
-                properties: {
-                  observation: { type: "STRING" },
-                  application: { type: "STRING" },
-                },
-                required: ["observation", "application"],
-              },
+              items: { type: "STRING" },
             },
             prayer: { type: "STRING" },
           },
@@ -288,8 +241,6 @@ async function callGeminiWithRetry(scriptureInput) {
       return await callGemini(scriptureInput);
     } catch (err) {
       lastErr = err;
-      // No `.status` means fetch itself threw (network blip, DNS, timeout),
-      // which is just as transient as a 503 and worth retrying the same way.
       const isRetryable = !err.status || RETRYABLE_STATUS_CODES.has(err.status);
       const attemptsLeft = MAX_RETRIES - attempt;
 
@@ -320,20 +271,22 @@ async function generateDevotion(scriptureInput) {
     throw new Error(`Failed to parse model output as JSON (finishReason: ${finishReason}). Raw output:\n${raw}`);
   }
 
-  if (!Array.isArray(parsed.points) || parsed.points.length !== 3 || !parsed.prayer) {
-    throw new Error(`Model output missing required fields or did not return exactly 3 points. Got: ${JSON.stringify(parsed)}`);
+  if (
+    !Array.isArray(parsed.points) ||
+    parsed.points.length !== 3 ||
+    !parsed.points.every((p) => typeof p === "string" && p.trim()) ||
+    !parsed.prayer
+  ) {
+    throw new Error(`Model output missing required fields or did not return exactly 3 text points. Got: ${JSON.stringify(parsed)}`);
   }
 
   // The rest of the pipeline (Apps Script, the site) expects `application`
-  // as an array of strings, so join each observation + application pair.
-  parsed.application = parsed.points.map(
-    (p) => `${String(p.observation).trim()} ${String(p.application).trim()}`
-  );
+  // as an array of strings.
+  parsed.application = parsed.points.map((p) => p.trim());
   delete parsed.points;
 
   // Scripture is never taken from the model. Whatever the user typed in the
-  // issue form is used verbatim, guaranteeing accuracy instead of trusting
-  // the model to reproduce text without paraphrasing or truncating it.
+  // issue form is used verbatim.
   parsed.scripture = scriptureInput;
 
   return parsed;

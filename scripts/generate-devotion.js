@@ -204,10 +204,13 @@ You will be given a scripture reference and/or text. Produce exactly two section
 
 Rules:
 - Match the language of your response to the language of the scripture input. If the scripture is in English, respond in English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog).
-- POINTS: exactly 3 points, written in first person plural. Use "we," "us," "our," "ours," and "ourselves." Never use "a believer," "a person," "someone," "people," "one," "you," or "I" in the points. Each point has exactly two fields, each exactly one sentence:
-  - "observation": the deeper meaning behind the passage, the thing that is easy to miss on a first read. Do not restate or paraphrase the verse. It can go beyond what the text says outright, as long as it follows from the passage's logic, context, tension, promise, command, or warning. Show how this truth actually plays out in ordinary daily life: in habits, reactions, decisions, relationships, work, money, or private thoughts.
-  - "application": what a person should concretely do about it and what needs to change. Name a specific attitude to drop, habit to start, or decision to make. Avoid vague advice like "trust God more" or "be more faithful."
-- Use simple, natural language. Avoid churchy filler, cliches, and generic Christian advice.
+- POINTS: 2 to 3 points, each one a short paragraph of 2 to 4 sentences. Write like a friend sharing a reflection in a small group, not like a sermon or a commentary. Always in first person plural: "we," "us," "our," "natin," "tayo." Never use "you," "I," "a believer," "a person," "someone," or "people."
+  - Each point should start from a truth in the passage, then move straight into what it means for how we live and what we should do about it, all in the same flow. No labels, no separate "observation" and "application" parts.
+  - Name the real, specific things we go through: fear of failure, rejection, uncertainty about the future, pride, worry about money, comparing ourselves to others, holding grudges. Pick what fits the passage. Don't stay abstract.
+  - Be direct about what to do. Use inclusive commands like "isuko natin," "ibigay natin," "let's stop," "huwag tayong." Name a concrete attitude to drop or a habit to start. Avoid vague lines like "trust God more."
+  - Language style: natural Taglish the way people actually talk, switching between Tagalog and English mid-sentence. Simple everyday words. Plain spoken grammar is fine, it doesn't need to sound polished. If the scripture is in English, use the same conversational voice in plain English instead.
+  - Mix sentence lengths. A longer sentence that explains, then a short one that lands. It's fine to end a point with a short punchy line like "Don't let fear control us."
+  - Refer to God as "the Lord," "God," "Diyos," or "Siya." No churchy filler, cliches, or generic Christian advice. Stay grounded in what the passage actually says or implies. Don't restate the verse.- Use simple, natural language. Avoid churchy filler, cliches, and generic Christian advice.
 - PRAYER: 2 sentences, first person, sincere, tied to the points above, not generic.
 - Do not restate or quote the scripture back, that's handled separately.
 - No preamble, no sign-off, no extra commentary.

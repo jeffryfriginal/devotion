@@ -223,6 +223,11 @@
     min-width: 180px;
     color-scheme: light dark;
   }
+  .write-mode {
+    margin: 0 0 12px;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
   .write-submit-btn {
     font-family: inherit;
     font-size: 0.85rem;
@@ -272,19 +277,26 @@
   }
   .entry-actions {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
     flex-shrink: 0;
   }
-  .entry-actions a {
+  .entry-actions a,
+  .entry-actions button {
+    font-family: inherit;
     font-size: 0.7rem;
     text-decoration: none;
     color: var(--muted);
+    background: none;
     border: 1px solid var(--accent);
     border-radius: 4px;
     padding: 3px 8px;
     white-space: nowrap;
+    cursor: pointer;
   }
-  .entry-actions a:hover {
+  .entry-actions a:hover,
+  .entry-actions button:hover {
     background: var(--bg);
   }
   .section {
@@ -448,6 +460,7 @@
     <button id="calendarToggle" class="calendar-toggle-btn" type="button">Show Calendar</button>
   </div>
   <div id="writePanel" class="calendar-panel write-panel" style="display:none;">
+    <p id="writeMode" class="write-mode" style="display:none;"></p>
     <label for="wScripture">Scripture</label>
     <textarea id="wScripture" class="search-box" rows="3" placeholder="Book Chapter:Verse - text"></textarea>
     <label for="wApplication">Application <small>(Enter adds a new bullet)</small></label>
@@ -458,6 +471,7 @@
     <input type="date" id="wDate" class="search-box" />
     <div id="writeError" class="write-error"></div>
     <button id="wSubmit" class="write-submit-btn" type="button">Save Devotion</button>
+    <button id="wCancel" class="calendar-toggle-btn" type="button" style="display:none; margin-left:8px;">Cancel edit</button>
   </div>
   <div id="calendarPanel" class="calendar-panel" style="display:none;">
     <div class="calendar-nav">
@@ -595,6 +609,7 @@ function render() {
       <div class="date-row">
         <div class="date">${formatDate(d.date)}</div>
         <div class="entry-actions">
+          <button type="button" class="edit-manual-btn" data-date="${escapeHtml(d.date)}">Edit Manually</button>
           <a href="${editScriptureUrl(d.date, d.scripture)}" target="_blank" rel="noopener">Edit Scripture</a>
           <a href="${editDateUrl(d.date)}" target="_blank" rel="noopener">Edit Date</a>
         </div>
@@ -635,10 +650,11 @@ backToTopBtn.addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// --- Manual entry -------------------------------------------------------
+// --- Manual entry / manual edit -----------------------------------------
 // Saves straight to Apps Script using the site password you already typed
 // to unlock the page. No GitHub issue, no workflow. The server validates and
-// normalizes everything, and this action can only CREATE a manual entry.
+// normalizes everything. The same panel is used to write a new entry
+// ("manualCreate") or to overwrite an existing one ("manualEdit").
 
 const writePanel = document.getElementById('writePanel');
 const writeToggleBtn = document.getElementById('writeToggle');
@@ -647,12 +663,66 @@ const wApplication = document.getElementById('wApplication');
 const wPrayer = document.getElementById('wPrayer');
 const wDate = document.getElementById('wDate');
 const writeError = document.getElementById('writeError');
+const writeMode = document.getElementById('writeMode');
+const wSubmit = document.getElementById('wSubmit');
+const wCancel = document.getElementById('wCancel');
+
+let editingDate = null; // set while the panel is editing an existing entry
+
+function showWriteMessage(text, ok) {
+  writeError.textContent = text;
+  writeError.className = ok ? 'write-error ok' : 'write-error';
+}
+
+function enterEditMode(d) {
+  editingDate = d.date;
+  wScripture.value = d.scripture || '';
+  const pts = Array.isArray(d.application) ? d.application : String(d.application || '').split('\n');
+  wApplication.value = pts.filter(Boolean).map((p) => '- ' + p).join('\n');
+  wPrayer.value = d.prayer || '';
+  wDate.value = normalizeDateStr(d.date) || '';
+  writeMode.textContent = 'Editing ' + formatDate(d.date) + '. Saving overwrites this entry.';
+  writeMode.style.display = 'block';
+  wSubmit.textContent = 'Save Changes';
+  wCancel.style.display = 'inline-block';
+  showWriteMessage('', false);
+  writePanel.style.display = 'block';
+  writeToggleBtn.textContent = 'Hide Writer';
+  writePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  wScripture.focus();
+}
+
+function exitEditMode() {
+  editingDate = null;
+  wScripture.value = '';
+  wApplication.value = '';
+  wPrayer.value = '';
+  wDate.value = '';
+  writeMode.style.display = 'none';
+  wSubmit.textContent = 'Save Devotion';
+  wCancel.style.display = 'none';
+}
 
 writeToggleBtn.addEventListener('click', () => {
   const isHidden = writePanel.style.display === 'none';
+  // Hiding the panel cancels an edit, so reopening it can never be mistaken
+  // for a new entry while it is secretly still pointed at an existing one.
+  if (!isHidden && editingDate) exitEditMode();
   writePanel.style.display = isHidden ? 'block' : 'none';
   writeToggleBtn.textContent = isHidden ? 'Hide Writer' : 'Write Manually';
   if (isHidden) wScripture.focus();
+});
+
+wCancel.addEventListener('click', () => {
+  exitEditMode();
+  showWriteMessage('', false);
+});
+
+document.getElementById('entries').addEventListener('click', (e) => {
+  const btn = e.target.closest('.edit-manual-btn');
+  if (!btn) return;
+  const d = devotions.find((x) => x.date === btn.dataset.date);
+  if (d) enterEditMode(d);
 });
 
 wApplication.addEventListener('focus', () => {
@@ -677,13 +747,6 @@ wApplication.addEventListener('beforeinput', (e) => {
   wApplication.selectionStart = wApplication.selectionEnd = s + 3;
 });
 
-const wSubmit = document.getElementById('wSubmit');
-
-function showWriteMessage(text, ok) {
-  writeError.textContent = text;
-  writeError.className = ok ? 'write-error ok' : 'write-error';
-}
-
 wSubmit.addEventListener('click', async () => {
   const scripture = wScripture.value.trim();
   const points = wApplication.value
@@ -700,24 +763,28 @@ wSubmit.addEventListener('click', async () => {
     return;
   }
 
+  const editing = editingDate;
   wSubmit.disabled = true;
   wSubmit.textContent = 'Saving...';
   showWriteMessage('', false);
 
   try {
+    const payload = {
+      action: editing ? 'manualEdit' : 'manualCreate',
+      password: sitePassword,
+      scripture,
+      application: points.join('\n'),
+      prayer: wPrayer.value.trim(),
+      date: wDate.value, // YYYY-MM-DD or blank
+    };
+    if (editing) payload.originalDate = editing;
+
     // text/plain keeps this a "simple" request so the browser skips the CORS
     // preflight, which Apps Script web apps cannot answer.
     const res = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'manualCreate',
-        password: sitePassword,
-        scripture,
-        application: points.join('\n'),
-        prayer: wPrayer.value.trim(),
-        date: wDate.value, // YYYY-MM-DD or blank
-      }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`Server error (${res.status}).`);
 
@@ -729,10 +796,7 @@ wSubmit.addEventListener('click', async () => {
     }
     if (!data.success) throw new Error(data.error || 'Could not save.');
 
-    wScripture.value = '';
-    wApplication.value = '';
-    wPrayer.value = '';
-    wDate.value = '';
+    exitEditMode(); // also clears the fields, same as after a normal save
     showWriteMessage(data.message || 'Saved.', true);
     await fetchDevotions(sitePassword);
   } catch (err) {
@@ -740,7 +804,7 @@ wSubmit.addEventListener('click', async () => {
     console.error(err);
   } finally {
     wSubmit.disabled = false;
-    wSubmit.textContent = 'Save Devotion';
+    wSubmit.textContent = editingDate ? 'Save Changes' : 'Save Devotion';
   }
 });
 

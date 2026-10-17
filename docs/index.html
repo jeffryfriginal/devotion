@@ -551,14 +551,6 @@ function editScriptureUrl(date, currentScripture) {
   return `https://github.com/${REPO}/issues/new?${params.toString()}`;
 }
 
-function editDateUrl(date) {
-  const params = new URLSearchParams({
-    template: 'edit-date.yml',
-    current_date: date,
-  });
-  return `https://github.com/${REPO}/issues/new?${params.toString()}`;
-}
-
 function newDevotionUrl() {
   return `https://github.com/${REPO}/issues/new?template=devotion.yml`;
 }
@@ -611,7 +603,6 @@ function render() {
         <div class="entry-actions">
           <button type="button" class="edit-manual-btn" data-date="${escapeHtml(d.date)}">Edit Manually</button>
           <a href="${editScriptureUrl(d.date, d.scripture)}" target="_blank" rel="noopener">Edit Scripture</a>
-          <a href="${editDateUrl(d.date)}" target="_blank" rel="noopener">Edit Date</a>
         </div>
       </div>
       <div class="section scripture">

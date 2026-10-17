@@ -716,6 +716,8 @@ writeToggleBtn.addEventListener('click', () => {
 wCancel.addEventListener('click', () => {
   exitEditMode();
   showWriteMessage('', false);
+  writePanel.style.display = 'none';
+  writeToggleBtn.textContent = 'Write Manually';
 });
 
 document.getElementById('entries').addEventListener('click', (e) => {

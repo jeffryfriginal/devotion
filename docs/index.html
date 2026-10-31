@@ -254,6 +254,35 @@
     opacity: 0.6;
     cursor: default;
   }
+  .export-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 16px;
+  }
+  .export-dates input[type="date"] {
+    width: auto;
+    min-width: 170px;
+    color-scheme: light dark;
+  }
+  .export-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .export-preset {
+    font-family: inherit;
+    font-size: 0.75rem;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  .export-preset:hover {
+    background: var(--bg);
+  }
   .entry {
     background: var(--card);
     border: 1px solid var(--border);
@@ -457,6 +486,7 @@
     </select>
     <a id="addNewLink" href="#" target="_blank" rel="noopener" class="add-new-btn">+ Add New Devotion</a>
     <button id="writeToggle" class="calendar-toggle-btn" type="button">Write Manually</button>
+    <button id="exportToggle" class="calendar-toggle-btn" type="button">Export</button>
     <button id="calendarToggle" class="calendar-toggle-btn" type="button">Show Calendar</button>
   </div>
   <div id="writePanel" class="calendar-panel write-panel" style="display:none;">
@@ -472,6 +502,29 @@
     <div id="writeError" class="write-error"></div>
     <button id="wSubmit" class="write-submit-btn" type="button">Save Devotion</button>
     <button id="wCancel" class="calendar-toggle-btn" type="button" style="display:none; margin-left:8px;">Cancel edit</button>
+  </div>
+  <div id="exportPanel" class="calendar-panel write-panel" style="display:none;">
+    <div class="export-dates">
+      <div>
+        <label for="xFrom">From <small>(blank = earliest)</small></label>
+        <input type="date" id="xFrom" class="search-box" />
+      </div>
+      <div>
+        <label for="xTo">To <small>(blank = latest)</small></label>
+        <input type="date" id="xTo" class="search-box" />
+      </div>
+    </div>
+    <div class="export-row">
+      <button type="button" class="export-preset" data-preset="month">This month</button>
+      <button type="button" class="export-preset" data-preset="30days">Last 30 days</button>
+      <button type="button" class="export-preset" data-preset="all">All</button>
+    </div>
+    <div id="exportInfo" class="write-error"></div>
+    <div class="export-row">
+      <button type="button" class="write-submit-btn" data-export="pdf">Download PDF</button>
+      <button type="button" class="write-submit-btn" data-export="md">Download Markdown</button>
+      <button type="button" class="write-submit-btn" data-export="txt">Download Text</button>
+    </div>
   </div>
   <div id="calendarPanel" class="calendar-panel" style="display:none;">
     <div class="calendar-nav">
@@ -799,6 +852,315 @@ wSubmit.addEventListener('click', async () => {
     wSubmit.disabled = false;
     wSubmit.textContent = editingDate ? 'Save Changes' : 'Save Devotion';
   }
+});
+
+// --- Export -------------------------------------------------------------
+// Runs entirely in the browser from the entries already loaded after unlock.
+// One combined file for the chosen date range, oldest entry first. The search
+// box does not affect it, only the From / To dates do.
+
+// ==pure-start==
+function longDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function shortDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function rangeLabelFor(entries) {
+  const first = entries[0].date;
+  const last = entries[entries.length - 1].date;
+  return first === last ? shortDate(first) : `${shortDate(first)} to ${shortDate(last)}`;
+}
+
+function pointsOf(d) {
+  const raw = Array.isArray(d.application) ? d.application : String(d.application || '').split('\n');
+  return raw.map((p) => String(p).trim()).filter(Boolean);
+}
+
+function buildTxt(entries) {
+  const bar = '='.repeat(60);
+  const out = [];
+  out.push('DAILY DEVOTION');
+  out.push(`${rangeLabelFor(entries)} (${entries.length} ${entries.length === 1 ? 'entry' : 'entries'})`);
+  out.push('');
+  for (const d of entries) {
+    out.push(bar);
+    out.push(longDate(d.date));
+    out.push(bar);
+    out.push('');
+    out.push('SCRIPTURE');
+    out.push(d.scripture || '');
+    out.push('');
+    out.push('APPLICATION');
+    for (const p of pointsOf(d)) out.push(`- ${p}`);
+    if (d.prayer) {
+      out.push('');
+      out.push('PRAYER');
+      out.push(d.prayer);
+    }
+    out.push('');
+    out.push('');
+  }
+  return out.join('\n').replace(/\n+$/, '\n');
+}
+
+function buildMd(entries) {
+  const out = [];
+  out.push('# Daily Devotion');
+  out.push('');
+  out.push(`*${rangeLabelFor(entries)} (${entries.length} ${entries.length === 1 ? 'entry' : 'entries'})*`);
+  out.push('');
+  entries.forEach((d, i) => {
+    if (i > 0) { out.push('---'); out.push(''); }
+    out.push(`## ${longDate(d.date)}`);
+    out.push('');
+    out.push('### Scripture');
+    out.push('');
+    out.push(`> ${(d.scripture || '').replace(/\n+/g, ' ')}`);
+    out.push('');
+    out.push('### Application');
+    out.push('');
+    for (const p of pointsOf(d)) out.push(`- ${p}`);
+    out.push('');
+    if (d.prayer) {
+      out.push('### Prayer');
+      out.push('');
+      out.push(d.prayer);
+      out.push('');
+    }
+  });
+  return out.join('\n').replace(/\n+$/, '\n');
+}
+
+// jsPDF's built-in fonts only cover Latin-1, so swap typographic characters
+// for plain ones and replace anything else with "?" instead of printing junk.
+function pdfSafe(str) {
+  return String(str || '')
+    .replace(/[\u2018\u2019\u201A\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u2033]/g, '"')
+    .replace(/[\u2013]/g, '-')
+    .replace(/[\u2014]/g, '--')
+    .replace(/\u2026/g, '...')
+    .replace(/[\u00A0\u2009\u200A\u202F]/g, ' ')
+    .replace(/[^\x00-\xFF\n]/g, '?');
+}
+
+function buildPdf(entries) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 56;
+  const maxW = pageW - margin * 2;
+  let y = margin;
+
+  const ink = [30, 30, 30];
+  const grey = [120, 120, 120];
+  const gold = [122, 92, 62];
+
+  const ensure = (h) => {
+    if (y + h > pageH - margin) { doc.addPage(); y = margin; }
+  };
+
+  function para(text, o = {}) {
+    const { style = 'normal', size = 11, gap = 0, color = ink } = o;
+    doc.setFont('times', style);
+    doc.setFontSize(size);
+    doc.setTextColor(color[0], color[1], color[2]);
+    const lh = size * 1.45;
+    const lines = doc.splitTextToSize(pdfSafe(text), maxW);
+    for (const l of lines) {
+      ensure(lh);
+      doc.text(l, margin, y + size);
+      y += lh;
+    }
+    y += gap;
+  }
+
+  function bullet(text) {
+    const size = 11;
+    const lh = size * 1.45;
+    const indent = 16;
+    doc.setFont('times', 'normal');
+    doc.setFontSize(size);
+    doc.setTextColor(ink[0], ink[1], ink[2]);
+    doc.setFillColor(ink[0], ink[1], ink[2]);
+    const lines = doc.splitTextToSize(pdfSafe(text), maxW - indent);
+    lines.forEach((l, i) => {
+      ensure(lh);
+      if (i === 0) doc.circle(margin + 5, y + size * 0.62, 1.7, 'F');
+      doc.text(l, margin + indent, y + size);
+      y += lh;
+    });
+    y += 3;
+  }
+
+  const label = { style: 'bold', size: 8.5, gap: 2, color: grey };
+
+  para('Daily Devotion', { style: 'bold', size: 22, gap: 2 });
+  para(`${rangeLabelFor(entries)} (${entries.length} ${entries.length === 1 ? 'entry' : 'entries'})`, { size: 10, gap: 20, color: grey });
+
+  entries.forEach((d, i) => {
+    const pageBefore = doc.getNumberOfPages();
+    ensure(150); // keep an entry's heading together with the start of its content
+    const brokeToNewPage = doc.getNumberOfPages() !== pageBefore;
+    if (i > 0 && !brokeToNewPage) {
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.5);
+      doc.line(margin, y, pageW - margin, y);
+      y += 20;
+    }
+    para(longDate(d.date), { style: 'bold', size: 13, gap: 8, color: gold });
+    para('SCRIPTURE', label);
+    para(d.scripture, { style: 'italic', size: 11.5, gap: 10 });
+    para('APPLICATION', label);
+    pointsOf(d).forEach(bullet);
+    y += 7;
+    if (d.prayer) {
+      para('PRAYER', label);
+      para(d.prayer, { gap: 4 });
+    }
+    y += 6;
+  });
+
+  const total = doc.getNumberOfPages();
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p);
+    doc.setFont('times', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`${p} / ${total}`, pageW / 2, pageH - 28, { align: 'center' });
+  }
+  return doc.output('blob');
+}
+// ==pure-end==
+
+const exportPanel = document.getElementById('exportPanel');
+const exportToggleBtn = document.getElementById('exportToggle');
+const xFrom = document.getElementById('xFrom');
+const xTo = document.getElementById('xTo');
+const exportInfo = document.getElementById('exportInfo');
+
+function setExportInfo(text, ok) {
+  exportInfo.textContent = text;
+  exportInfo.className = ok ? 'write-error ok' : 'write-error';
+}
+
+function entriesInRange() {
+  const from = xFrom.value;
+  const to = xTo.value;
+  return devotions
+    .map((d) => ({ d, key: normalizeDateStr(d.date) }))
+    .filter((x) => x.key && (!from || x.key >= from) && (!to || x.key <= to))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .map((x) => ({ ...x.d, date: x.key }));
+}
+
+function updateExportInfo() {
+  const buttons = exportPanel.querySelectorAll('[data-export]');
+  let ok = true;
+  if (xFrom.value && xTo.value && xFrom.value > xTo.value) {
+    setExportInfo('"From" is after "To".', false);
+    ok = false;
+  } else {
+    const n = entriesInRange().length;
+    if (n === 0) {
+      setExportInfo('No entries in this range.', false);
+      ok = false;
+    } else {
+      setExportInfo(`${n} ${n === 1 ? 'entry' : 'entries'} in this range.`, true);
+    }
+  }
+  buttons.forEach((b) => { b.disabled = !ok; });
+}
+
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function applyPreset(name) {
+  const now = new Date();
+  if (name === 'month') {
+    xFrom.value = isoLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+    xTo.value = isoLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  } else if (name === '30days') {
+    xFrom.value = isoLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29));
+    xTo.value = isoLocal(now);
+  } else {
+    xFrom.value = '';
+    xTo.value = '';
+  }
+  updateExportInfo();
+}
+
+// The PDF library is only fetched when you actually export a PDF, so a missing
+// or blocked file can never break the rest of the page.
+function loadJsPdf() {
+  if (window.jspdf) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = 'jspdf.umd.min.js';
+    el.onload = resolve;
+    el.onerror = () => reject(new Error('Could not load the PDF library. Check that jspdf.umd.min.js is in the docs folder.'));
+    document.head.appendChild(el);
+  });
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function runExport(format) {
+  const entries = entriesInRange();
+  if (entries.length === 0) return;
+
+  const first = entries[0].date;
+  const last = entries[entries.length - 1].date;
+  const base = first === last ? `devotions_${first}` : `devotions_${first}_to_${last}`;
+
+  try {
+    if (format === 'txt') {
+      downloadBlob(`${base}.txt`, new Blob([buildTxt(entries)], { type: 'text/plain;charset=utf-8' }));
+    } else if (format === 'md') {
+      downloadBlob(`${base}.md`, new Blob([buildMd(entries)], { type: 'text/markdown;charset=utf-8' }));
+    } else {
+      setExportInfo('Building PDF...', true);
+      await loadJsPdf();
+      downloadBlob(`${base}.pdf`, buildPdf(entries));
+    }
+    setExportInfo(`Downloaded ${base}.${format}`, true);
+  } catch (err) {
+    setExportInfo(err.message || 'Export failed.', false);
+    console.error(err);
+  }
+}
+
+exportToggleBtn.addEventListener('click', () => {
+  const isHidden = exportPanel.style.display === 'none';
+  exportPanel.style.display = isHidden ? 'block' : 'none';
+  exportToggleBtn.textContent = isHidden ? 'Hide Export' : 'Export';
+  if (isHidden) updateExportInfo();
+});
+
+xFrom.addEventListener('change', updateExportInfo);
+xTo.addEventListener('change', updateExportInfo);
+
+exportPanel.addEventListener('click', (e) => {
+  const preset = e.target.closest('[data-preset]');
+  if (preset) { applyPreset(preset.dataset.preset); return; }
+  const exp = e.target.closest('[data-export]');
+  if (exp && !exp.disabled) runExport(exp.dataset.export);
 });
 
 // --- Calendar ---------------------------------------------------------

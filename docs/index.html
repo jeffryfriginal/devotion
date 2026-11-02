@@ -516,6 +516,7 @@
     </div>
     <div class="export-row">
       <button type="button" class="export-preset" data-preset="month">This month</button>
+      <button type="button" class="export-preset" data-preset="7days">Last 7 days</button>
       <button type="button" class="export-preset" data-preset="30days">Last 30 days</button>
       <button type="button" class="export-preset" data-preset="all">All</button>
     </div>
@@ -1087,6 +1088,9 @@ function applyPreset(name) {
   if (name === 'month') {
     xFrom.value = isoLocal(new Date(now.getFullYear(), now.getMonth(), 1));
     xTo.value = isoLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  } else if (name === '7days') {
+    xFrom.value = isoLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+    xTo.value = isoLocal(now);
   } else if (name === '30days') {
     xFrom.value = isoLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29));
     xTo.value = isoLocal(now);

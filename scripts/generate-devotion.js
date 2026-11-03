@@ -167,7 +167,7 @@ const SYSTEM_PROMPT = `You write short daily devotions for a personal devotion a
 You will be given a scripture reference and/or text. Produce exactly two sections: POINTS and PRAYER.
 
 Rules:
-- Match the language of your response to the language of the scripture input. If the scripture is in English, respond in plain conversational English. If the scripture is in Tagalog, respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog). Never switch to Taglish for an English scripture.
+- Always respond in modern conversational Taglish (natural mixed Tagalog-English, the way people actually speak, not formal/pure Tagalog), no matter what language the scripture is in. This applies to both POINTS and PRAYER.
 - POINTS: exactly 3 points, each one a short paragraph of 2 to 4 sentences. Write like a friend sharing a reflection in a small group, not like a sermon, a blog post, or a commentary. Always in first person plural ("we," "us," "our," and "natin," "tayo" in Taglish). Never use "you," "I," "a believer," "a person," "someone," or "people."
   - Three different angles. Each point must take its own angle on the passage: a different phrase, assumption, tension, command, or area of life. No two points may make the same basic point in different words. Do not default to the safe, obvious landing (like "God did it for us first") unless the passage is genuinely driving at it. Look for what is easy to miss on a first read, and ask what the passage assumes about us.
   - Each point starts from a truth in the passage, then moves straight into what it means for how we live and what we should do, all in one flow. No labels.
@@ -177,8 +177,8 @@ Rules:
   - Voice: simple everyday words, spoken grammar is fine, it doesn't need to sound polished. Avoid pulpit phrases like "we are called to," "self-righteous," "embrace," "journey," "bitterness," "walk in," "lay down." Mix sentence lengths: a longer sentence that explains, then a short one that lands.
   - Refer to God as "the Lord," "God," "Diyos," or "Siya." No churchy filler or cliches. Stay grounded in what the passage actually says or implies. Don't restate the verse.
   - Style examples. Copy the voice and rhythm only. Never reuse their wording, topics, or structure.
-    Taglish example (for Tagalog scripture only): "Kapag nakakaramdam ng takot, palaging magpray, isuko natin lahat yan sa Lord. And huwag tayong mag worry masyado. We fear because of failure or rejection or the uncertainty ng future. Ibigay natin lahat yan sa Lord. Dont let fear control us."
-    English example (for English scripture): "We say we trust God, but we check our bank balance every hour. Worry about money is rarely about the money. It's about whether we believe He will actually show up. Next time that number makes our chest tight, we pray first and look second."
+    "Hindi madali magpatawad kapag paulit-ulit na tayong nasaktan. Pero habang hawak natin yung galit, tayo rin yung napapagod, hindi yung taong nakasakit sa atin. Sabihin natin kay God na ayaw pa nating bitawan, tapos hilingin natin na Siya na muna ang magbuhat nito."
+    "Minsan kaya tayo laging late sa pagsunod ay dahil gusto muna nating makita yung buong plano. Pero hindi ganun yung hinihingi Niya sa atin dito. Isang hakbang lang muna, yung nasa harap natin ngayon."
 - PRAYER: 2 sentences, first person, sincere, tied to the points above, not generic.
 - Do not restate or quote the scripture back, that's handled separately.
 - No preamble, no sign-off, no extra commentary.
@@ -186,20 +186,24 @@ Rules:
 Respond ONLY with JSON in this shape, with exactly 3 strings in "points":
 {"points": ["...", "...", "..."], "prayer": "..."}`;
 
-// Confirm this ID against Google's current model list.
-const GEMINI_MODEL = "gemini-3.5-flash-lite";
+// Tried in order. If the first model keeps failing with a retryable error
+// (overload, timeout), the next one gets a turn. Confirm these IDs against
+// Google's current model list.
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
-const MAX_RETRIES = 3;
+const ATTEMPTS_PER_MODEL = 2;
+const REQUEST_TIMEOUT_MS = 30000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function callGemini(scriptureInput) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+async function callGemini(model, scriptureInput) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const response = await fetch(url, {
     method: "POST",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       "Content-Type": "application/json",
       "x-goog-api-key": GEMINI_API_KEY,
@@ -238,30 +242,40 @@ async function callGemini(scriptureInput) {
   return response.json();
 }
 
-async function callGeminiWithRetry(scriptureInput) {
+async function callGeminiWithFallback(scriptureInput) {
   let lastErr;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await callGemini(scriptureInput);
-    } catch (err) {
-      lastErr = err;
-      const isRetryable = !err.status || RETRYABLE_STATUS_CODES.has(err.status);
-      const attemptsLeft = MAX_RETRIES - attempt;
+  for (const model of GEMINI_MODELS) {
+    for (let attempt = 1; attempt <= ATTEMPTS_PER_MODEL; attempt++) {
+      try {
+        const data = await callGemini(model, scriptureInput);
+        console.log(`Gemini model used: ${model}`);
+        return data;
+      } catch (err) {
+        lastErr = err;
+        const isRetryable =
+          err.name === "TimeoutError" ||
+          err.name === "AbortError" ||
+          !err.status ||
+          RETRYABLE_STATUS_CODES.has(err.status);
+        const reason = err.name === "TimeoutError" ? "timed out" : err.message;
+        console.log(`Gemini call failed on ${model} (attempt ${attempt}/${ATTEMPTS_PER_MODEL}): ${reason}`);
 
-      if (!isRetryable || attemptsLeft === 0) throw err;
+        // A non-retryable error (bad key, bad request) won't be fixed by
+        // another model, so fail immediately.
+        if (!isRetryable) throw err;
 
-      const delayMs = 2000 * Math.pow(2, attempt) + Math.random() * 500;
-      console.log(
-        `Gemini call failed (${err.message}). Retrying in ${Math.round(delayMs / 1000)}s (${attemptsLeft} attempt(s) left)...`
-      );
-      await sleep(delayMs);
+        if (attempt < ATTEMPTS_PER_MODEL) {
+          await sleep(3000 * attempt + Math.random() * 1000);
+        }
+      }
     }
+    console.log(`Giving up on ${model}, trying the next model if there is one.`);
   }
   throw lastErr;
 }
 
 async function generateDevotion(scriptureInput) {
-  const data = await callGeminiWithRetry(scriptureInput);
+  const data = await callGeminiWithFallback(scriptureInput);
   const finishReason = data.candidates?.[0]?.finishReason;
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   console.log(`Gemini finishReason: ${finishReason}`);

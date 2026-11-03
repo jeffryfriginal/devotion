@@ -187,7 +187,7 @@ Respond ONLY with JSON in this shape, with exactly 3 strings in "points":
 {"points": ["...", "...", "..."], "prayer": "..."}`;
 
 // Confirm this ID against Google's current model list.
-const GEMINI_MODEL = "gemini-3.7-flash";
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const MAX_RETRIES = 3;

@@ -374,6 +374,34 @@
     margin-bottom: 16px;
     transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
   }
+  .search-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .search-wrap .search-box {
+    margin-bottom: 0;
+    padding-right: 40px;
+  }
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 50%;
+    background: var(--muted);
+    color: var(--card);
+    font-size: 1rem;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+    padding: 0;
+  }
+  .search-clear:hover {
+    opacity: 0.85;
+  }
   .search-status {
     color: var(--muted);
     font-size: 0.85rem;
@@ -535,7 +563,10 @@
     </div>
     <div class="calendar-grid" id="calendarGrid"></div>
   </div>
-  <input type="text" id="searchBox" class="search-box" placeholder="Search scripture, application, or prayer..." />
+  <div class="search-wrap">
+    <input type="text" id="searchBox" class="search-box" placeholder="Search scripture, application, or prayer..." />
+    <button id="searchClear" class="search-clear" type="button" aria-label="Clear search" style="display:none;">&times;</button>
+  </div>
   <p id="searchStatus" class="search-status" style="display:none;"></p>
   <div id="entries"></div>
 </div>
@@ -628,6 +659,7 @@ function render() {
   const searchStatusEl = document.getElementById('searchStatus');
   const order = document.getElementById('sortOrder').value;
   const query = document.getElementById('searchBox').value.trim();
+  document.getElementById('searchClear').style.display = query ? 'block' : 'none';
 
   const filtered = devotions.filter((d) => matchesSearch(d, query));
 
@@ -681,6 +713,13 @@ function render() {
 
 document.getElementById('sortOrder').addEventListener('change', render);
 document.getElementById('searchBox').addEventListener('input', render);
+
+document.getElementById('searchClear').addEventListener('click', () => {
+  const box = document.getElementById('searchBox');
+  box.value = '';
+  render();
+  box.focus();
+});
 
 // --- Back to top --------------------------------------------------------
 
